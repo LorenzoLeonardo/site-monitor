@@ -13,7 +13,7 @@ use chrono::{FixedOffset, Local};
 use curl::Curl;
 use curl_http_client::{Collector, HttpClient};
 use emailer::{Emailer, SmtpHostName, SmtpPort};
-use http::StatusCode;
+use http::{HeaderMap, StatusCode};
 use log::LevelFilter;
 use oauth2::url::Url;
 use oauth2::{AccessToken, DeviceAuthorizationUrl, Scope, TokenUrl};
@@ -46,20 +46,15 @@ async fn main() {
         if client.status() == StatusCode::OK {
             println!("Website is good");
         } else {
+            let headers = client.headers();
             println!("Website is bad: {}", client.status());
             let token = login(curl.clone()).await;
             send_email(
                 &token,
                 curl.clone(),
-                "Enzo Tech Web Monitoring Report",
-                format!(
-                    "{} is down at {}",
-                    site_to_monitor,
-                    Local::now()
-                        .with_timezone(&FixedOffset::east_opt(8 * 3600).unwrap())
-                        .format("%Y-%m-%d %H:%M:%S (GMT%:z)")
-                )
-                .as_str(),
+                site_to_monitor,
+                headers,
+                client.status(),
             )
             .await;
 
@@ -90,7 +85,25 @@ async fn login(curl: Curl) -> AccessToken {
     .unwrap()
 }
 
-async fn send_email(token: &AccessToken, curl: Curl, subject: &str, body: &str) {
+async fn send_email(
+    token: &AccessToken,
+    curl: Curl,
+    url: &str,
+    headers: &HeaderMap,
+    status: StatusCode,
+) {
+    let header = headers
+        .iter()
+        .map(|(key, value)| format!("{}: {}", key.as_str(), value.to_str().unwrap_or("")))
+        .collect::<Vec<String>>()
+        .join("\r\n");
+    let report = format!(
+        "{url} is down at {}\r\n\r\n{header}\r\nStatus Code:{status}",
+        Local::now()
+            .with_timezone(&FixedOffset::east_opt(8 * 3600).unwrap())
+            .format("%Y-%m-%d %H:%M:%S (GMT%:z)")
+    );
+
     let (_sender_name, sender_email) = get_sender_profile(
         &token,
         &ProfileUrl(Url::from_str("https://outlook.office.com/api/v2.0/me").unwrap()),
@@ -108,7 +121,7 @@ async fn send_email(token: &AccessToken, curl: Curl, subject: &str, body: &str) 
         "Lorenzo Leonardo".into(),
         "enzotechcomputersolutions@gmail.com".into(),
     )
-    .send_email(token, subject, body)
+    .send_email(token, "Enzo Tech Web Monitoring Report", report.as_str())
     .await
     .unwrap()
 }
