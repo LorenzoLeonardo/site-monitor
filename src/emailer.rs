@@ -2,8 +2,6 @@ use mail_send::{mail_builder::MessageBuilder, Credentials, SmtpClientBuilder};
 use oauth2::AccessToken;
 use serde::{Deserialize, Serialize};
 
-use crate::error::OAuth2Result;
-
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Default)]
 pub struct SmtpHostName(pub String);
 
@@ -42,18 +40,22 @@ impl Emailer {
         access_token: &AccessToken,
         subject: &str,
         body: &str,
-    ) -> OAuth2Result<()> {
+        html: Option<Vec<u8>>,
+    ) {
         // Start of sending Email
-        let message = MessageBuilder::new()
+        let mut message = MessageBuilder::new()
             .from(self.sender.to_owned())
             .to(self.recipients)
             .subject(subject)
             .text_body(body);
+        if let Some(byte_vec) = html {
+            message = message.html_body(String::from_utf8(byte_vec).unwrap());
+        }
 
         let (_sender_name, sender_email) = self.sender;
         let credentials =
             Credentials::new_xoauth2(sender_email.as_str(), access_token.secret().as_str());
-        log::info!("Authenticating SMTP XOAUTH2 Credentials....");
+        log::info!("Authenticating....");
         let email_connect = SmtpClientBuilder::new(self.smtp_server.0.as_ref(), self.smtp_port.0)
             .implicit_tls(false)
             .credentials(credentials)
@@ -62,16 +64,14 @@ impl Emailer {
 
         match email_connect {
             Ok(mut result) => {
-                log::info!("SMTP XOAUTH2 Credentials accepted!");
-                log::info!("Sending SMTP XOAUTH2 Email....");
+                log::info!("Sending Email....");
                 let send = result.send(message).await;
                 match send {
                     Ok(_result) => {
-                        log::info!("Sending Email success!");
+                        log::info!("Sending success!");
                     }
                     Err(err) => {
-                        log::info!("Sending Email failed!");
-                        log::error!("Error Details: {err:?}");
+                        log::error!("Sending failed! {err}");
                     }
                 }
             }
@@ -80,6 +80,5 @@ impl Emailer {
                 log::error!("Error Details: {err:?}");
             }
         }
-        Ok(())
     }
 }

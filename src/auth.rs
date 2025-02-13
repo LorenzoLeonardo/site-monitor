@@ -78,6 +78,7 @@ pub async fn device_code_flow(
             })
             .await?;
     }
+    log::info!("Access granted!");
     Ok(token_keeper.access_token)
 }
 
@@ -168,9 +169,6 @@ impl DeviceCodeFlowTrait for DeviceCodeFlow {
         scopes: Vec<Scope>,
         async_http_callback: T,
     ) -> OAuth2Result<StandardDeviceAuthorizationResponse> {
-        log::info!(
-            "There is no Access token, please login via browser with this link and input the code."
-        );
         let mut client = BasicClient::new(self.client_id.to_owned());
         if let Some(client_secret) = self.client_secret.to_owned() {
             client = client.set_client_secret(client_secret);
@@ -205,7 +203,6 @@ impl DeviceCodeFlowTrait for DeviceCodeFlow {
             .exchange_device_access_token(&device_auth_response)
             .request_async(&async_http_callback, tokio::time::sleep, None)
             .await?;
-        log::info!("Access token successfuly retrieved from the endpoint.");
         Ok(token_result)
     }
 
@@ -225,9 +222,7 @@ impl DeviceCodeFlowTrait for DeviceCodeFlow {
         if token_keeper.has_access_token_expired() {
             match token_keeper.refresh_token {
                 Some(ref_token) => {
-                    log::info!(
-                        "Access token has expired, contacting endpoint to get a new access token."
-                    );
+                    log::info!("Renewing access...");
                     let mut client = BasicClient::new(self.client_id.to_owned());
                     if let Some(client_secret) = self.client_secret.to_owned() {
                         client = client.set_client_secret(client_secret);
@@ -259,7 +254,7 @@ impl DeviceCodeFlowTrait for DeviceCodeFlow {
                     }
                 }
                 None => {
-                    log::info!("Access token has expired but there is no refresh token, please login again.");
+                    log::info!("Please login again.");
                     token_keeper.delete(file_name)?;
                     Err(OAuth2Error::new(
                         ErrorCodes::NoToken,
