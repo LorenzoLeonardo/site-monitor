@@ -66,7 +66,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let status_code = StatusCode::from_u16(response.response_code()? as u16)?;
         let (body, headers) = response.get_ref().get_response_body_and_headers();
 
-        if status_code == StatusCode::OK {
+        if status_code != StatusCode::OK {
             let headers = headers.ok_or("No Headers")?;
             log::warn!("Website is bad: {}", status_code);
 
