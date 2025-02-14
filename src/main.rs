@@ -14,10 +14,12 @@ use chrono::{FixedOffset, Local};
 use curl_http_client::{Collector, ExtendedHandler, HttpClient};
 use emailer::{Emailer, SmtpHostName, SmtpPort};
 use error::{SiteMonitorError, SiteMonitorResult};
+use futures::future;
 use http::{HeaderMap, StatusCode};
 use log::LevelFilter;
 use oauth2::url::Url;
 use oauth2::{AccessToken, DeviceAuthorizationUrl, Scope, TokenUrl};
+
 use profile::{get_sender_profile, ProfileUrl};
 
 const DEVICE_AUTH_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/devicecode";
@@ -50,12 +52,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let _ = request_token(actor.clone()).await?;
 
-    let site_to_monitor = "https://img-corp.net".to_string();
+    let site_to_monitor = [
+        "https://img-corp.net",
+        "https://kaiserhealthgroup.net",
+        "https://www.rust-lang.org",
+        "https://img-corp.com",
+        "http://localhost:8080",
+    ];
 
-    let handle = tokio::spawn(async move { monitor_site(actor, &site_to_monitor).await });
+    let mut handle = Vec::new();
+    for site in site_to_monitor {
+        let actor_inner = actor.clone();
+        handle.push(tokio::spawn(async move {
+            if let Err(err) = monitor_site(actor_inner, site).await {
+                log::error!("{} in {site}", err.to_string());
+            }
+        }));
+    }
 
-    let _ = handle.await;
-
+    let _ = future::join_all(handle).await;
     Ok(())
 }
 
@@ -63,12 +78,15 @@ async fn monitor_site(
     actor: CurlActor<Collector>,
     site_to_monitor: &str,
 ) -> Result<(), SiteMonitorError> {
+    log::info!("Monitoring {site_to_monitor}...");
+
     let collector = Collector::RamAndHeaders(Vec::new(), Vec::new());
     loop {
-        //let actor = actor.clone();
         let response = HttpClient::new(collector.clone())
             .url(site_to_monitor)?
             .follow_location(true)?
+            .connect_timeout(Duration::from_secs(30))?
+            .timeout(Duration::from_secs(30))?
             .nobody(true)?
             .nonblocking(actor.clone())
             .send_request()
