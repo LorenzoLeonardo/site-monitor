@@ -28,6 +28,11 @@ const PROFILE_URL: &str = "https://outlook.office.com/api/v2.0/me";
 const CLIENT_ID: &str = "f7c886f5-00f6-4981-b000-b4d5ab0e5ef2";
 const SMTP_SERVER: &str = "smtp.office365.com";
 const SMTP_PORT: u16 = 587;
+const SCOPES: &'static [&str] = &[
+    "offline_access",
+    "https://outlook.office.com/SMTP.Send",
+    "https://outlook.office.com/User.Read",
+];
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -84,16 +89,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 async fn request_token(curl: Curl) -> OAuth2Result<AccessToken> {
+    let scopes = SCOPES.iter().map(|&s| Scope::new(s.to_string())).collect();
     auth::device_code_flow(
         CLIENT_ID,
         None,
         DeviceAuthorizationUrl::new(DEVICE_AUTH_URL.to_string())?,
         TokenUrl::new(TOKEN_URL.to_string())?,
-        vec![
-            Scope::new("offline_access".to_string()),
-            Scope::new("https://outlook.office.com/SMTP.Send".to_string()),
-            Scope::new("https://outlook.office.com/User.Read".to_string()),
-        ],
+        scopes,
         curl,
     )
     .await
