@@ -1687,7 +1687,6 @@ name = "site-monitor"
 version = "0.1.0"
 dependencies = [
  "async-curl",
- "async-trait",
  "chrono",
  "curl-http-client",
  "derive-deref-rs",

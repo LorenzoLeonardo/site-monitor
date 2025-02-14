@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 async-curl = "0.4"
-async-trait = "0.1"
 chrono = "0.4"
 curl-http-client = "2.3"
 derive-deref-rs = "0.1"

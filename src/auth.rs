@@ -3,18 +3,18 @@ use std::{
     future::Future,
     io::Write,
     path::{Path, PathBuf},
+    pin::Pin,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use async_curl::CurlActor;
-use async_trait::async_trait;
 use curl_http_client::{Collector, HttpClient};
 use directories::UserDirs;
 use oauth2::{
     basic::{BasicClient, BasicTokenType},
-    AccessToken, ClientId, ClientSecret, DeviceAuthorizationUrl, EmptyExtraTokenFields,
-    HttpRequest, HttpResponse, RefreshToken, Scope, StandardDeviceAuthorizationResponse,
-    StandardTokenResponse, TokenResponse, TokenUrl,
+    AccessToken, AsyncHttpClient, ClientId, ClientSecret, DeviceAuthorizationUrl,
+    EmptyExtraTokenFields, HttpRequest, HttpResponse, RefreshToken, Scope,
+    StandardDeviceAuthorizationResponse, StandardTokenResponse, TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 
@@ -33,6 +33,7 @@ pub async fn device_code_flow(
         client_secret,
         device_auth_endpoint,
         token_endpoint,
+        actor,
     );
 
     let directory = UserDirs::new().ok_or(OAuth2Error::new(
@@ -48,11 +49,7 @@ pub async fn device_code_flow(
 
     // If there is no exsting token, get it from the cloud
     if let Err(_err) = token_keeper.read(&token_file) {
-        let device_auth_response = oauth2_cloud
-            .request_device_code(scopes, |request| async {
-                send(actor.clone(), request).await
-            })
-            .await?;
+        let device_auth_response = oauth2_cloud.request_device_code(scopes).await?;
 
         log::info!(
             "Login Here: {}",
@@ -63,55 +60,18 @@ pub async fn device_code_flow(
             &device_auth_response.user_code().secret()
         );
 
-        let token = oauth2_cloud
-            .poll_access_token(device_auth_response, |request| async {
-                send(actor.clone(), request).await
-            })
-            .await?;
+        let token = oauth2_cloud.poll_access_token(device_auth_response).await?;
         token_keeper = TokenKeeper::from(token);
         token_keeper.set_directory(directory.to_path_buf());
 
         token_keeper.save(&token_file)?;
     } else {
         token_keeper = oauth2_cloud
-            .get_access_token(&directory, &token_file, |request| async {
-                send(actor.clone(), request).await
-            })
+            .get_access_token(&directory, &token_file)
             .await?;
     }
     log::info!("Access granted!");
     Ok(token_keeper.access_token)
-}
-
-async fn send(
-    actor: CurlActor<Collector>,
-    request: oauth2::HttpRequest,
-) -> Result<oauth2::HttpResponse, OAuth2Error> {
-    log::debug!("Request Url: {}", request.uri());
-    log::debug!("Request Header: {:?}", request.headers());
-    log::debug!("Request Method: {}", request.method());
-    log::debug!("Request Body: {}", String::from_utf8_lossy(request.body()));
-
-    let response = HttpClient::new(Collector::RamAndHeaders(Vec::new(), Vec::new()))
-        .request(request)?
-        .nonblocking(actor)
-        .perform()
-        .await?
-        .map(|resp| {
-            if let Some(resp) = resp {
-                resp
-            } else {
-                Vec::new()
-            }
-        });
-
-    log::debug!("Response Status: {}", response.status());
-    log::debug!("Response Header: {:?}", response.headers());
-    log::debug!(
-        "Response Body: {}",
-        String::from_utf8_lossy(response.body())
-    );
-    Ok(response)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -151,55 +111,18 @@ impl From<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>> for Toke
     }
 }
 
-#[async_trait(?Send)]
-pub trait DeviceCodeFlowTrait {
-    async fn request_device_code<
-        F: Future<Output = Result<HttpResponse, RE>>,
-        RE: std::error::Error + 'static,
-        T: Fn(HttpRequest) -> F,
-    >(
-        &self,
-        scopes: Vec<Scope>,
-        async_http_callback: T,
-    ) -> OAuth2Result<StandardDeviceAuthorizationResponse>;
-    async fn poll_access_token<
-        F: Future<Output = Result<HttpResponse, RE>>,
-        RE: std::error::Error + 'static,
-        T: Fn(HttpRequest) -> F,
-    >(
-        &self,
-        device_auth_response: StandardDeviceAuthorizationResponse,
-        async_http_callback: T,
-    ) -> OAuth2Result<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>>;
-    async fn get_access_token<
-        F: Future<Output = Result<HttpResponse, RE>>,
-        RE: std::error::Error + 'static,
-        T: Fn(HttpRequest) -> F,
-    >(
-        &self,
-        file_directory: &Path,
-        file_name: &Path,
-        async_http_callback: T,
-    ) -> OAuth2Result<TokenKeeper>;
-}
-
 pub struct DeviceCodeFlow {
     client_id: ClientId,
     client_secret: Option<ClientSecret>,
     device_auth_endpoint: DeviceAuthorizationUrl,
     token_endpoint: TokenUrl,
+    curl_client: OAuth2Client,
 }
 
-#[async_trait(?Send)]
-impl DeviceCodeFlowTrait for DeviceCodeFlow {
-    async fn request_device_code<
-        F: Future<Output = Result<HttpResponse, RE>>,
-        RE: std::error::Error + 'static,
-        T: Fn(HttpRequest) -> F,
-    >(
+impl DeviceCodeFlow {
+    async fn request_device_code(
         &self,
         scopes: Vec<Scope>,
-        async_http_callback: T,
     ) -> OAuth2Result<StandardDeviceAuthorizationResponse> {
         let mut client = BasicClient::new(self.client_id.to_owned());
         if let Some(client_secret) = self.client_secret.to_owned() {
@@ -211,19 +134,14 @@ impl DeviceCodeFlowTrait for DeviceCodeFlow {
             .set_device_authorization_url(self.device_auth_endpoint.to_owned())
             .exchange_device_code()
             .add_scopes(scopes)
-            .request_async(&async_http_callback)
+            .request_async(&self.curl_client)
             .await?;
 
         Ok(device_auth_response)
     }
-    async fn poll_access_token<
-        F: Future<Output = Result<HttpResponse, RE>>,
-        RE: std::error::Error + 'static,
-        T: Fn(HttpRequest) -> F,
-    >(
+    async fn poll_access_token(
         &self,
         device_auth_response: StandardDeviceAuthorizationResponse,
-        async_http_callback: T,
     ) -> OAuth2Result<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>> {
         let mut client = BasicClient::new(self.client_id.to_owned());
         if let Some(client_secret) = self.client_secret.to_owned() {
@@ -233,20 +151,15 @@ impl DeviceCodeFlowTrait for DeviceCodeFlow {
             .set_auth_type(oauth2::AuthType::RequestBody)
             .set_token_uri(self.token_endpoint.to_owned())
             .exchange_device_access_token(&device_auth_response)
-            .request_async(&async_http_callback, tokio::time::sleep, None)
+            .request_async(&self.curl_client, tokio::time::sleep, None)
             .await?;
         Ok(token_result)
     }
 
-    async fn get_access_token<
-        F: Future<Output = Result<HttpResponse, RE>>,
-        RE: std::error::Error + 'static,
-        T: Fn(HttpRequest) -> F,
-    >(
+    async fn get_access_token(
         &self,
         file_directory: &Path,
         file_name: &Path,
-        async_http_callback: T,
     ) -> OAuth2Result<TokenKeeper> {
         let mut token_keeper = TokenKeeper::new(file_directory.to_path_buf());
         token_keeper.read(file_name)?;
@@ -263,7 +176,7 @@ impl DeviceCodeFlowTrait for DeviceCodeFlow {
                         .set_auth_type(oauth2::AuthType::RequestBody)
                         .set_token_uri(self.token_endpoint.to_owned())
                         .exchange_refresh_token(&ref_token)
-                        .request_async(&async_http_callback)
+                        .request_async(&self.curl_client)
                         .await;
 
                     match response {
@@ -298,20 +211,20 @@ impl DeviceCodeFlowTrait for DeviceCodeFlow {
             Ok(token_keeper)
         }
     }
-}
 
-impl DeviceCodeFlow {
     pub fn new(
         client_id: ClientId,
         client_secret: Option<ClientSecret>,
         device_auth_endpoint: DeviceAuthorizationUrl,
         token_endpoint: TokenUrl,
+        actor: CurlActor<Collector>,
     ) -> Self {
         Self {
             client_id,
             client_secret,
             device_auth_endpoint,
             token_endpoint,
+            curl_client: OAuth2Client::new(actor),
         }
     }
 }
@@ -369,5 +282,52 @@ impl TokenKeeper {
     pub fn delete(&self, file_name: &Path) -> OAuth2Result<()> {
         let input_path = self.file_directory.join(file_name);
         Ok(fs::remove_file(input_path)?)
+    }
+}
+
+struct OAuth2Client {
+    actor: CurlActor<Collector>,
+}
+
+impl OAuth2Client {
+    pub fn new(actor: CurlActor<Collector>) -> Self {
+        Self { actor }
+    }
+}
+
+impl<'c> AsyncHttpClient<'c> for OAuth2Client {
+    type Error = OAuth2Error;
+
+    type Future = Pin<Box<dyn Future<Output = Result<HttpResponse, Self::Error>> + Send + 'c>>;
+
+    fn call(&'c self, request: HttpRequest) -> Self::Future {
+        let actor = self.actor.clone();
+        Box::pin(async move {
+            log::debug!("Request Url: {}", request.uri());
+            log::debug!("Request Header: {:?}", request.headers());
+            log::debug!("Request Method: {}", request.method());
+            log::debug!("Request Body: {}", String::from_utf8_lossy(request.body()));
+
+            let response = HttpClient::new(Collector::RamAndHeaders(Vec::new(), Vec::new()))
+                .request(request)?
+                .nonblocking(actor)
+                .perform()
+                .await?
+                .map(|resp| {
+                    if let Some(resp) = resp {
+                        resp
+                    } else {
+                        Vec::new()
+                    }
+                });
+
+            log::debug!("Response Status: {}", response.status());
+            log::debug!("Response Header: {:?}", response.headers());
+            log::debug!(
+                "Response Body: {}",
+                String::from_utf8_lossy(response.body())
+            );
+            Ok(response)
+        })
     }
 }
