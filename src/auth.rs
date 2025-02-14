@@ -74,43 +74,6 @@ pub async fn device_code_flow(
     Ok(token_keeper.access_token)
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TokenKeeper {
-    pub access_token: AccessToken,
-    pub refresh_token: Option<RefreshToken>,
-    scopes: Option<Vec<String>>,
-    expires_in: Option<Duration>,
-    token_receive_time: Duration,
-    #[serde(skip_serializing)]
-    #[serde(skip_deserializing)]
-    file_directory: PathBuf,
-}
-
-impl From<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>> for TokenKeeper {
-    fn from(
-        token_response: StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>,
-    ) -> TokenKeeper {
-        let refresh_token = token_response
-            .refresh_token()
-            .map(|ref_tok| ref_tok.to_owned());
-
-        let scopes = token_response
-            .scopes()
-            .map(|scope| scope.iter().map(|e| e.to_string()).collect());
-
-        Self {
-            access_token: token_response.access_token().to_owned(),
-            refresh_token,
-            scopes,
-            expires_in: token_response.expires_in(),
-            token_receive_time: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("Time went backwards"),
-            file_directory: PathBuf::new(),
-        }
-    }
-}
-
 pub struct DeviceCodeFlow {
     client_id: ClientId,
     client_secret: Option<ClientSecret>,
@@ -229,6 +192,65 @@ impl DeviceCodeFlow {
     }
 }
 
+struct OAuth2Client {
+    actor: CurlActor<Collector>,
+}
+
+impl OAuth2Client {
+    pub fn new(actor: CurlActor<Collector>) -> Self {
+        Self { actor }
+    }
+}
+
+impl<'c> AsyncHttpClient<'c> for OAuth2Client {
+    type Error = OAuth2Error;
+
+    type Future = Pin<Box<dyn Future<Output = Result<HttpResponse, Self::Error>> + Send + 'c>>;
+
+    fn call(&'c self, request: HttpRequest) -> Self::Future {
+        let actor = self.actor.clone();
+        Box::pin(async move {
+            log::debug!("Request Url: {}", request.uri());
+            log::debug!("Request Header: {:?}", request.headers());
+            log::debug!("Request Method: {}", request.method());
+            log::debug!("Request Body: {}", String::from_utf8_lossy(request.body()));
+
+            let response = HttpClient::new(Collector::RamAndHeaders(Vec::new(), Vec::new()))
+                .request(request)?
+                .nonblocking(actor)
+                .perform()
+                .await?
+                .map(|resp| {
+                    if let Some(resp) = resp {
+                        resp
+                    } else {
+                        Vec::new()
+                    }
+                });
+
+            log::debug!("Response Status: {}", response.status());
+            log::debug!("Response Header: {:?}", response.headers());
+            log::debug!(
+                "Response Body: {}",
+                String::from_utf8_lossy(response.body())
+            );
+            Ok(response)
+        })
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TokenKeeper {
+    pub access_token: AccessToken,
+    pub refresh_token: Option<RefreshToken>,
+    scopes: Option<Vec<String>>,
+    expires_in: Option<Duration>,
+    token_receive_time: Duration,
+    #[serde(skip_serializing)]
+    #[serde(skip_deserializing)]
+    file_directory: PathBuf,
+}
+
 impl TokenKeeper {
     pub fn new(file_directory: PathBuf) -> Self {
         Self {
@@ -285,49 +307,27 @@ impl TokenKeeper {
     }
 }
 
-struct OAuth2Client {
-    actor: CurlActor<Collector>,
-}
+impl From<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>> for TokenKeeper {
+    fn from(
+        token_response: StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>,
+    ) -> TokenKeeper {
+        let refresh_token = token_response
+            .refresh_token()
+            .map(|ref_tok| ref_tok.to_owned());
 
-impl OAuth2Client {
-    pub fn new(actor: CurlActor<Collector>) -> Self {
-        Self { actor }
-    }
-}
+        let scopes = token_response
+            .scopes()
+            .map(|scope| scope.iter().map(|e| e.to_string()).collect());
 
-impl<'c> AsyncHttpClient<'c> for OAuth2Client {
-    type Error = OAuth2Error;
-
-    type Future = Pin<Box<dyn Future<Output = Result<HttpResponse, Self::Error>> + Send + 'c>>;
-
-    fn call(&'c self, request: HttpRequest) -> Self::Future {
-        let actor = self.actor.clone();
-        Box::pin(async move {
-            log::debug!("Request Url: {}", request.uri());
-            log::debug!("Request Header: {:?}", request.headers());
-            log::debug!("Request Method: {}", request.method());
-            log::debug!("Request Body: {}", String::from_utf8_lossy(request.body()));
-
-            let response = HttpClient::new(Collector::RamAndHeaders(Vec::new(), Vec::new()))
-                .request(request)?
-                .nonblocking(actor)
-                .perform()
-                .await?
-                .map(|resp| {
-                    if let Some(resp) = resp {
-                        resp
-                    } else {
-                        Vec::new()
-                    }
-                });
-
-            log::debug!("Response Status: {}", response.status());
-            log::debug!("Response Header: {:?}", response.headers());
-            log::debug!(
-                "Response Body: {}",
-                String::from_utf8_lossy(response.body())
-            );
-            Ok(response)
-        })
+        Self {
+            access_token: token_response.access_token().to_owned(),
+            refresh_token,
+            scopes,
+            expires_in: token_response.expires_in(),
+            token_receive_time: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards"),
+            file_directory: PathBuf::new(),
+        }
     }
 }
