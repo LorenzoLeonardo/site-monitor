@@ -13,7 +13,7 @@ use async_curl::CurlActor;
 use chrono::{FixedOffset, Local};
 use curl_http_client::{Collector, ExtendedHandler, HttpClient};
 use emailer::{Emailer, SmtpHostName, SmtpPort};
-use error::OAuth2Result;
+use error::{OAuth2Error, OAuth2Result};
 use http::{HeaderMap, StatusCode};
 use log::LevelFilter;
 use oauth2::url::Url;
@@ -50,15 +50,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let _ = request_token(actor.clone()).await?;
 
-    let site_to_monitor = "https://img-corp.net";
+    let site_to_monitor = "https://img-corp.net".to_string();
 
-    monitor_site(actor, &site_to_monitor).await
+    let handle = tokio::spawn(async move { monitor_site(actor, &site_to_monitor).await });
+
+    let _ = handle.await;
+
+    Ok(())
 }
 
 async fn monitor_site(
     actor: CurlActor<Collector>,
     site_to_monitor: &str,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), OAuth2Error> {
     let collector = Collector::RamAndHeaders(Vec::new(), Vec::new());
     loop {
         //let actor = actor.clone();
@@ -74,7 +78,10 @@ async fn monitor_site(
         let (body, headers) = response.get_ref().get_response_body_and_headers();
 
         if status_code != StatusCode::OK {
-            let headers = headers.ok_or("No Headers")?;
+            let headers = headers.ok_or(OAuth2Error::new(
+                error::ErrorCodes::HttpError,
+                "No Headers".to_owned(),
+            ))?;
             log::warn!("Website is bad: {}", status_code);
 
             let token = request_token(actor.clone()).await?;

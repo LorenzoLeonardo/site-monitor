@@ -4,6 +4,7 @@ use std::{error::Error, str::FromStr};
 
 // 3rd party crates
 use curl_http_client::collector::ExtendedHandler;
+use http::status::InvalidStatusCode;
 use log::SetLoggerError;
 use oauth2::{
     url, ConfigurationError, ErrorResponseType, RequestTokenError, StandardErrorResponse,
@@ -208,6 +209,18 @@ impl From<http::header::InvalidHeaderName> for OAuth2Error {
 
 impl From<http::header::ToStrError> for OAuth2Error {
     fn from(e: http::header::ToStrError) -> Self {
+        OAuth2Error::new(ErrorCodes::HttpError, e.to_string())
+    }
+}
+
+impl From<curl_http_client::dep::curl::Error> for OAuth2Error {
+    fn from(e: curl_http_client::dep::curl::Error) -> Self {
+        OAuth2Error::new(ErrorCodes::CurlError, e.to_string())
+    }
+}
+
+impl From<InvalidStatusCode> for OAuth2Error {
+    fn from(e: InvalidStatusCode) -> Self {
         OAuth2Error::new(ErrorCodes::HttpError, e.to_string())
     }
 }
