@@ -3,6 +3,10 @@ mod emailer;
 mod error;
 mod profile;
 
+use std::fs::File;
+use std::io::{self, BufRead};
+use std::path::Path;
+
 use std::env;
 use std::error::Error;
 use std::io::Write;
@@ -48,24 +52,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     log::info!("Website Monitoring has started...");
     log::info!("Log {:?}", log_level);
-    let actor = CurlActor::new();
 
+    let actor = CurlActor::new();
     let _ = request_token(actor.clone()).await?;
 
-    let site_to_monitor = [
-        "https://img-corp.net",
-        "https://kaiserhealthgroup.net",
-        "https://www.rust-lang.org",
-        "https://img-corp.com",
-        "http://localhost:8080",
-    ];
+    let path = Path::new("websites.txt");
+    let file = File::open(&path)?;
+
+    let reader = io::BufReader::new(file);
 
     let mut handle = Vec::new();
-    for site in site_to_monitor {
+    for site in reader.lines() {
         let actor_inner = actor.clone();
         handle.push(tokio::spawn(async move {
-            if let Err(err) = monitor_site(actor_inner, site).await {
-                log::error!("[{site}] {}", err.to_string());
+            let site = site.unwrap();
+            if let Err(err) = monitor_site(actor_inner, site.as_str()).await {
+                log::error!("[{}] {}", site.as_str(), err.to_string());
             }
         }));
     }
