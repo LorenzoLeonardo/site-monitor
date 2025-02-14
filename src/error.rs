@@ -72,12 +72,12 @@ impl From<String> for ErrorCodes {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct OAuth2Error {
+pub struct SiteMonitorError {
     pub error_code: ErrorCodes,
     pub error_code_desc: String,
 }
 
-impl OAuth2Error {
+impl SiteMonitorError {
     pub fn new(error_code: ErrorCodes, error_code_desc: String) -> Self {
         Self {
             error_code,
@@ -86,15 +86,15 @@ impl OAuth2Error {
     }
 }
 
-impl From<ConfigurationError> for OAuth2Error {
+impl From<ConfigurationError> for SiteMonitorError {
     fn from(e: ConfigurationError) -> Self {
-        OAuth2Error::new(ErrorCodes::ConfigurationError, e.to_string())
+        SiteMonitorError::new(ErrorCodes::ConfigurationError, e.to_string())
     }
 }
 
-impl From<url::ParseError> for OAuth2Error {
+impl From<url::ParseError> for SiteMonitorError {
     fn from(e: url::ParseError) -> Self {
-        OAuth2Error::new(ErrorCodes::UrlParseError, e.to_string())
+        SiteMonitorError::new(ErrorCodes::UrlParseError, e.to_string())
     }
 }
 
@@ -107,7 +107,7 @@ where
     }
 }
 
-impl<E, O> From<RequestTokenError<E, StandardErrorResponse<O>>> for OAuth2Error
+impl<E, O> From<RequestTokenError<E, StandardErrorResponse<O>>> for SiteMonitorError
 where
     E: Error + 'static,
     O: ErrorResponseType + 'static + ToString + Clone + Display,
@@ -119,133 +119,133 @@ where
                     .error_description()
                     .map(|ret| ret.to_string())
                     .unwrap_or_default();
-                OAuth2Error::new(ErrorCodes::from(err.clone()), desc)
+                SiteMonitorError::new(ErrorCodes::from(err.clone()), desc)
             }
             RequestTokenError::Request(err) => {
-                OAuth2Error::new(ErrorCodes::RequestError, err.to_string())
+                SiteMonitorError::new(ErrorCodes::RequestError, err.to_string())
             }
             RequestTokenError::Parse(err, _data) => {
-                OAuth2Error::new(ErrorCodes::ParseError, err.to_string())
+                SiteMonitorError::new(ErrorCodes::ParseError, err.to_string())
             }
-            RequestTokenError::Other(err) => OAuth2Error::new(ErrorCodes::OtherError, err),
+            RequestTokenError::Other(err) => SiteMonitorError::new(ErrorCodes::OtherError, err),
         }
     }
 }
 
-impl From<serde_json::Error> for OAuth2Error {
+impl From<serde_json::Error> for SiteMonitorError {
     fn from(e: serde_json::Error) -> Self {
-        OAuth2Error::new(ErrorCodes::SerdeJsonParseError, e.to_string())
+        SiteMonitorError::new(ErrorCodes::SerdeJsonParseError, e.to_string())
     }
 }
 
-impl From<std::io::Error> for OAuth2Error {
+impl From<std::io::Error> for SiteMonitorError {
     fn from(e: std::io::Error) -> Self {
-        OAuth2Error::new(ErrorCodes::IoError, e.to_string())
+        SiteMonitorError::new(ErrorCodes::IoError, e.to_string())
     }
 }
 
-impl From<SetLoggerError> for OAuth2Error {
+impl From<SetLoggerError> for SiteMonitorError {
     fn from(e: SetLoggerError) -> Self {
-        OAuth2Error::new(ErrorCodes::LoggerError, e.to_string())
+        SiteMonitorError::new(ErrorCodes::LoggerError, e.to_string())
     }
 }
 
-impl<C> From<curl_http_client::error::Error<C>> for OAuth2Error
+impl<C> From<curl_http_client::error::Error<C>> for SiteMonitorError
 where
     C: ExtendedHandler + Debug + Send + 'static,
 {
     fn from(e: curl_http_client::error::Error<C>) -> Self {
         match e {
             curl_http_client::error::Error::Curl(err) => {
-                OAuth2Error::new(ErrorCodes::CurlError, err.description().to_owned())
+                SiteMonitorError::new(ErrorCodes::CurlError, err.description().to_owned())
             }
             curl_http_client::error::Error::Http(err) => {
-                OAuth2Error::new(ErrorCodes::HttpError, err)
+                SiteMonitorError::new(ErrorCodes::HttpError, err)
             }
             curl_http_client::error::Error::Perform(err) => match err {
                 async_curl::error::Error::Curl(err) => {
-                    OAuth2Error::new(ErrorCodes::CurlError, err.description().to_owned())
+                    SiteMonitorError::new(ErrorCodes::CurlError, err.description().to_owned())
                 }
                 async_curl::error::Error::Multi(err) => {
-                    OAuth2Error::new(ErrorCodes::MultiError, err.description().to_owned())
+                    SiteMonitorError::new(ErrorCodes::MultiError, err.description().to_owned())
                 }
                 async_curl::error::Error::TokioRecv(err) => {
-                    OAuth2Error::new(ErrorCodes::TokioRecv, err.to_string())
+                    SiteMonitorError::new(ErrorCodes::TokioRecv, err.to_string())
                 }
                 async_curl::error::Error::TokioSend(err) => {
-                    OAuth2Error::new(ErrorCodes::TokioSend, err.to_string())
+                    SiteMonitorError::new(ErrorCodes::TokioSend, err.to_string())
                 }
             },
             curl_http_client::error::Error::Other(err) => {
-                OAuth2Error::new(ErrorCodes::OtherError, err)
+                SiteMonitorError::new(ErrorCodes::OtherError, err)
             }
         }
     }
 }
 
-impl From<http::header::InvalidHeaderValue> for OAuth2Error {
+impl From<http::header::InvalidHeaderValue> for SiteMonitorError {
     fn from(e: http::header::InvalidHeaderValue) -> Self {
-        OAuth2Error::new(ErrorCodes::HttpError, e.to_string())
+        SiteMonitorError::new(ErrorCodes::HttpError, e.to_string())
     }
 }
 
-impl From<http::uri::InvalidUri> for OAuth2Error {
+impl From<http::uri::InvalidUri> for SiteMonitorError {
     fn from(e: http::uri::InvalidUri) -> Self {
-        OAuth2Error::new(ErrorCodes::HttpError, e.to_string())
+        SiteMonitorError::new(ErrorCodes::HttpError, e.to_string())
     }
 }
 
-impl From<http::method::InvalidMethod> for OAuth2Error {
+impl From<http::method::InvalidMethod> for SiteMonitorError {
     fn from(e: http::method::InvalidMethod) -> Self {
-        OAuth2Error::new(ErrorCodes::HttpError, e.to_string())
+        SiteMonitorError::new(ErrorCodes::HttpError, e.to_string())
     }
 }
 
-impl From<http::header::InvalidHeaderName> for OAuth2Error {
+impl From<http::header::InvalidHeaderName> for SiteMonitorError {
     fn from(e: http::header::InvalidHeaderName) -> Self {
-        OAuth2Error::new(ErrorCodes::HttpError, e.to_string())
+        SiteMonitorError::new(ErrorCodes::HttpError, e.to_string())
     }
 }
 
-impl From<http::header::ToStrError> for OAuth2Error {
+impl From<http::header::ToStrError> for SiteMonitorError {
     fn from(e: http::header::ToStrError) -> Self {
-        OAuth2Error::new(ErrorCodes::HttpError, e.to_string())
+        SiteMonitorError::new(ErrorCodes::HttpError, e.to_string())
     }
 }
 
-impl From<curl_http_client::dep::curl::Error> for OAuth2Error {
+impl From<curl_http_client::dep::curl::Error> for SiteMonitorError {
     fn from(e: curl_http_client::dep::curl::Error) -> Self {
-        OAuth2Error::new(ErrorCodes::CurlError, e.to_string())
+        SiteMonitorError::new(ErrorCodes::CurlError, e.to_string())
     }
 }
 
-impl From<InvalidStatusCode> for OAuth2Error {
+impl From<InvalidStatusCode> for SiteMonitorError {
     fn from(e: InvalidStatusCode) -> Self {
-        OAuth2Error::new(ErrorCodes::HttpError, e.to_string())
+        SiteMonitorError::new(ErrorCodes::HttpError, e.to_string())
     }
 }
 
-impl std::fmt::Display for OAuth2Error {
+impl std::fmt::Display for SiteMonitorError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OAuth2Error")
+        f.debug_struct("SiteMonitorError")
             .field("error_code", &self.error_code.to_string())
             .field("error_code_desc", &self.error_code_desc)
             .finish()
     }
 }
 
-impl Debug for OAuth2Error {
+impl Debug for SiteMonitorError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OAuth2Error")
+        f.debug_struct("SiteMonitorError")
             .field("error_code", &self.error_code.to_string())
             .field("error_code_desc", &self.error_code_desc)
             .finish()
     }
 }
 
-impl std::error::Error for OAuth2Error {}
+impl std::error::Error for SiteMonitorError {}
 
-pub type OAuth2Result<T> = Result<T, OAuth2Error>;
+pub type SiteMonitorResult<T> = Result<T, SiteMonitorError>;
 
 #[cfg(test)]
 mod tests {

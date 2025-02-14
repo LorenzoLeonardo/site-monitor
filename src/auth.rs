@@ -18,7 +18,7 @@ use oauth2::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::error::{ErrorCodes, OAuth2Error, OAuth2Result};
+use crate::error::{ErrorCodes, SiteMonitorError, SiteMonitorResult};
 
 pub async fn device_code_flow(
     client_id: &str,
@@ -27,7 +27,7 @@ pub async fn device_code_flow(
     token_endpoint: TokenUrl,
     scopes: Vec<Scope>,
     actor: CurlActor<Collector>,
-) -> OAuth2Result<AccessToken> {
+) -> SiteMonitorResult<AccessToken> {
     let oauth2_cloud = DeviceCodeFlow::new(
         ClientId::new(client_id.to_string()),
         client_secret,
@@ -36,7 +36,7 @@ pub async fn device_code_flow(
         actor,
     );
 
-    let directory = UserDirs::new().ok_or(OAuth2Error::new(
+    let directory = UserDirs::new().ok_or(SiteMonitorError::new(
         ErrorCodes::DirectoryError,
         "No valid directory".to_string(),
     ))?;
@@ -86,7 +86,7 @@ impl DeviceCodeFlow {
     async fn request_device_code(
         &self,
         scopes: Vec<Scope>,
-    ) -> OAuth2Result<StandardDeviceAuthorizationResponse> {
+    ) -> SiteMonitorResult<StandardDeviceAuthorizationResponse> {
         let mut client = BasicClient::new(self.client_id.to_owned());
         if let Some(client_secret) = self.client_secret.to_owned() {
             client = client.set_client_secret(client_secret);
@@ -105,7 +105,7 @@ impl DeviceCodeFlow {
     async fn poll_access_token(
         &self,
         device_auth_response: StandardDeviceAuthorizationResponse,
-    ) -> OAuth2Result<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>> {
+    ) -> SiteMonitorResult<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>> {
         let mut client = BasicClient::new(self.client_id.to_owned());
         if let Some(client_secret) = self.client_secret.to_owned() {
             client = client.set_client_secret(client_secret);
@@ -123,7 +123,7 @@ impl DeviceCodeFlow {
         &self,
         file_directory: &Path,
         file_name: &Path,
-    ) -> OAuth2Result<TokenKeeper> {
+    ) -> SiteMonitorResult<TokenKeeper> {
         let mut token_keeper = TokenKeeper::new(file_directory.to_path_buf());
         token_keeper.read(file_name)?;
 
@@ -150,7 +150,7 @@ impl DeviceCodeFlow {
                             Ok(token_keeper)
                         }
                         Err(e) => {
-                            let error = OAuth2Error::from(e);
+                            let error = SiteMonitorError::from(e);
                             if error.error_code == ErrorCodes::InvalidGrant {
                                 let file = TokenKeeper::new(file_directory.to_path_buf());
                                 if let Err(e) = file.delete(file_name) {
@@ -164,7 +164,7 @@ impl DeviceCodeFlow {
                 None => {
                     log::info!("Please login again.");
                     token_keeper.delete(file_name)?;
-                    Err(OAuth2Error::new(
+                    Err(SiteMonitorError::new(
                         ErrorCodes::NoToken,
                         "There is no refresh token.".into(),
                     ))
@@ -203,7 +203,7 @@ impl OAuth2Client {
 }
 
 impl<'c> AsyncHttpClient<'c> for OAuth2Client {
-    type Error = OAuth2Error;
+    type Error = SiteMonitorError;
 
     type Future = Pin<Box<dyn Future<Output = Result<HttpResponse, Self::Error>> + Send + 'c>>;
 
@@ -278,7 +278,7 @@ impl TokenKeeper {
         }
     }
 
-    pub fn read(&mut self, file_name: &Path) -> OAuth2Result<()> {
+    pub fn read(&mut self, file_name: &Path) -> SiteMonitorResult<()> {
         let temp_dir = self.file_directory.clone();
         let input_path = self.file_directory.join(file_name);
         let text = std::fs::read_to_string(input_path)?;
@@ -288,7 +288,7 @@ impl TokenKeeper {
         Ok(())
     }
 
-    pub fn save(&self, file_name: &Path) -> OAuth2Result<()> {
+    pub fn save(&self, file_name: &Path) -> SiteMonitorResult<()> {
         let input_path = self.file_directory.join(file_name);
         let json = serde_json::to_string(self)?;
 
@@ -301,7 +301,7 @@ impl TokenKeeper {
         Ok(())
     }
 
-    pub fn delete(&self, file_name: &Path) -> OAuth2Result<()> {
+    pub fn delete(&self, file_name: &Path) -> SiteMonitorResult<()> {
         let input_path = self.file_directory.join(file_name);
         Ok(fs::remove_file(input_path)?)
     }

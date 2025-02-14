@@ -7,7 +7,7 @@ use http::{HeaderMap, HeaderValue};
 use oauth2::{url::Url, AccessToken};
 use serde::{Deserialize, Serialize};
 
-use crate::error::{OAuth2Error, OAuth2Result};
+use crate::error::{SiteMonitorError, SiteMonitorResult};
 
 #[derive(Deref)]
 pub struct SenderName(pub String);
@@ -53,13 +53,13 @@ pub async fn get_sender_profile(
     access_token: &AccessToken,
     profile_endpoint: &ProfileUrl,
     actor: CurlActor<Collector>,
-) -> OAuth2Result<(SenderName, SenderEmail)> {
+) -> SiteMonitorResult<(SenderName, SenderEmail)> {
     let mut headers = HeaderMap::new();
 
     let header_val = format!("Bearer {}", access_token.secret().as_str());
     headers.insert(
         "Authorization",
-        HeaderValue::from_str(&header_val).map_err(OAuth2Error::from)?,
+        HeaderValue::from_str(&header_val).map_err(SiteMonitorError::from)?,
     );
     let mut request = oauth2::HttpRequest::new(Vec::new());
     *request.uri_mut() = oauth2::http::Uri::from_str(profile_endpoint.0.to_owned().as_ref())?;
@@ -96,7 +96,7 @@ pub async fn get_sender_profile(
 async fn send(
     actor: CurlActor<Collector>,
     request: oauth2::HttpRequest,
-) -> Result<oauth2::HttpResponse, OAuth2Error> {
+) -> Result<oauth2::HttpResponse, SiteMonitorError> {
     log::debug!("Request Url: {}", request.uri());
     log::debug!("Request Header: {:?}", request.headers());
     log::debug!("Request Method: {}", request.method());

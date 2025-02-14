@@ -13,7 +13,7 @@ use async_curl::CurlActor;
 use chrono::{FixedOffset, Local};
 use curl_http_client::{Collector, ExtendedHandler, HttpClient};
 use emailer::{Emailer, SmtpHostName, SmtpPort};
-use error::{OAuth2Error, OAuth2Result};
+use error::{SiteMonitorError, SiteMonitorResult};
 use http::{HeaderMap, StatusCode};
 use log::LevelFilter;
 use oauth2::url::Url;
@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn monitor_site(
     actor: CurlActor<Collector>,
     site_to_monitor: &str,
-) -> Result<(), OAuth2Error> {
+) -> Result<(), SiteMonitorError> {
     let collector = Collector::RamAndHeaders(Vec::new(), Vec::new());
     loop {
         //let actor = actor.clone();
@@ -78,7 +78,7 @@ async fn monitor_site(
         let (body, headers) = response.get_ref().get_response_body_and_headers();
 
         if status_code != StatusCode::OK {
-            let headers = headers.ok_or(OAuth2Error::new(
+            let headers = headers.ok_or(SiteMonitorError::new(
                 error::ErrorCodes::HttpError,
                 "No Headers".to_owned(),
             ))?;
@@ -102,7 +102,7 @@ async fn monitor_site(
     }
 }
 
-async fn request_token(actor: CurlActor<Collector>) -> OAuth2Result<AccessToken> {
+async fn request_token(actor: CurlActor<Collector>) -> SiteMonitorResult<AccessToken> {
     let scopes = SCOPES.iter().map(|&s| Scope::new(s.to_string())).collect();
     auth::device_code_flow(
         CLIENT_ID,
