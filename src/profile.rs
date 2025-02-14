@@ -1,14 +1,13 @@
 use std::str::FromStr;
 
+use async_curl::CurlActor;
+use curl_http_client::{Collector, HttpClient};
 use derive_deref_rs::Deref;
 use http::{HeaderMap, HeaderValue};
 use oauth2::{url::Url, AccessToken};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    curl::Curl,
-    error::{OAuth2Error, OAuth2Result},
-};
+use crate::error::{OAuth2Error, OAuth2Result};
 
 #[derive(Deref)]
 pub struct SenderName(pub String);
@@ -53,7 +52,7 @@ pub struct ProfileUrl(pub Url);
 pub async fn get_sender_profile(
     access_token: &AccessToken,
     profile_endpoint: &ProfileUrl,
-    curl: Curl,
+    actor: CurlActor<Collector>,
 ) -> OAuth2Result<(SenderName, SenderEmail)> {
     let mut headers = HeaderMap::new();
 
@@ -71,7 +70,7 @@ pub async fn get_sender_profile(
         oauth2::http::HeaderValue::from_str(&header_val)?,
     );
 
-    let response = curl.send(request).await?;
+    let response = send(actor, request).await?;
 
     let body = String::from_utf8(response.body().to_vec()).unwrap_or_default();
 
@@ -92,6 +91,37 @@ pub async fn get_sender_profile(
     log::info!("Sender Name: {}", name.as_str());
     log::info!("Sender E-mail: {}", email.as_str());
     Ok((name, email))
+}
+
+async fn send(
+    actor: CurlActor<Collector>,
+    request: oauth2::HttpRequest,
+) -> Result<oauth2::HttpResponse, OAuth2Error> {
+    log::debug!("Request Url: {}", request.uri());
+    log::debug!("Request Header: {:?}", request.headers());
+    log::debug!("Request Method: {}", request.method());
+    log::debug!("Request Body: {}", String::from_utf8_lossy(request.body()));
+
+    let response = HttpClient::new(Collector::RamAndHeaders(Vec::new(), Vec::new()))
+        .request(request)?
+        .nonblocking(actor)
+        .perform()
+        .await?
+        .map(|resp| {
+            if let Some(resp) = resp {
+                resp
+            } else {
+                Vec::new()
+            }
+        });
+
+    log::debug!("Response Status: {}", response.status());
+    log::debug!("Response Header: {:?}", response.headers());
+    log::debug!(
+        "Response Body: {}",
+        String::from_utf8_lossy(response.body())
+    );
+    Ok(response)
 }
 
 #[cfg(test)]

@@ -6,7 +6,9 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use async_curl::CurlActor;
 use async_trait::async_trait;
+use curl_http_client::{Collector, HttpClient};
 use directories::UserDirs;
 use oauth2::{
     basic::{BasicClient, BasicTokenType},
@@ -16,10 +18,7 @@ use oauth2::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    curl::Curl,
-    error::{ErrorCodes, OAuth2Error, OAuth2Result},
-};
+use crate::error::{ErrorCodes, OAuth2Error, OAuth2Result};
 
 pub async fn device_code_flow(
     client_id: &str,
@@ -27,7 +26,7 @@ pub async fn device_code_flow(
     device_auth_endpoint: DeviceAuthorizationUrl,
     token_endpoint: TokenUrl,
     scopes: Vec<Scope>,
-    curl: Curl,
+    actor: CurlActor<Collector>,
 ) -> OAuth2Result<AccessToken> {
     let oauth2_cloud = DeviceCodeFlow::new(
         ClientId::new(client_id.to_string()),
@@ -50,7 +49,9 @@ pub async fn device_code_flow(
     // If there is no exsting token, get it from the cloud
     if let Err(_err) = token_keeper.read(&token_file) {
         let device_auth_response = oauth2_cloud
-            .request_device_code(scopes, |request| async { curl.send(request).await })
+            .request_device_code(scopes, |request| async {
+                send(actor.clone(), request).await
+            })
             .await?;
 
         log::info!(
@@ -64,7 +65,7 @@ pub async fn device_code_flow(
 
         let token = oauth2_cloud
             .poll_access_token(device_auth_response, |request| async {
-                curl.send(request).await
+                send(actor.clone(), request).await
             })
             .await?;
         token_keeper = TokenKeeper::from(token);
@@ -74,12 +75,43 @@ pub async fn device_code_flow(
     } else {
         token_keeper = oauth2_cloud
             .get_access_token(&directory, &token_file, |request| async {
-                curl.send(request).await
+                send(actor.clone(), request).await
             })
             .await?;
     }
     log::info!("Access granted!");
     Ok(token_keeper.access_token)
+}
+
+async fn send(
+    actor: CurlActor<Collector>,
+    request: oauth2::HttpRequest,
+) -> Result<oauth2::HttpResponse, OAuth2Error> {
+    log::debug!("Request Url: {}", request.uri());
+    log::debug!("Request Header: {:?}", request.headers());
+    log::debug!("Request Method: {}", request.method());
+    log::debug!("Request Body: {}", String::from_utf8_lossy(request.body()));
+
+    let response = HttpClient::new(Collector::RamAndHeaders(Vec::new(), Vec::new()))
+        .request(request)?
+        .nonblocking(actor)
+        .perform()
+        .await?
+        .map(|resp| {
+            if let Some(resp) = resp {
+                resp
+            } else {
+                Vec::new()
+            }
+        });
+
+    log::debug!("Response Status: {}", response.status());
+    log::debug!("Response Header: {:?}", response.headers());
+    log::debug!(
+        "Response Body: {}",
+        String::from_utf8_lossy(response.body())
+    );
+    Ok(response)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -1,5 +1,4 @@
 mod auth;
-mod curl;
 mod emailer;
 mod error;
 mod profile;
@@ -12,7 +11,6 @@ use std::time::Duration;
 
 use async_curl::CurlActor;
 use chrono::{FixedOffset, Local};
-use curl::Curl;
 use curl_http_client::{Collector, ExtendedHandler, HttpClient};
 use emailer::{Emailer, SmtpHostName, SmtpPort};
 use error::OAuth2Result;
@@ -48,13 +46,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     log::info!("Website Monitoring has started...");
     log::info!("Log {:?}", log_level);
-    let curl = Curl::new();
-    let _ = request_token(curl.clone()).await?;
-
     let actor = CurlActor::new();
-    let collector = Collector::RamAndHeaders(Vec::new(), Vec::new());
+
+    let _ = request_token(actor.clone()).await?;
+
     let site_to_monitor = "https://img-corp.net";
+
+    monitor_site(actor, &site_to_monitor).await
+}
+
+async fn monitor_site(
+    actor: CurlActor<Collector>,
+    site_to_monitor: &str,
+) -> Result<(), Box<dyn Error>> {
+    let collector = Collector::RamAndHeaders(Vec::new(), Vec::new());
     loop {
+        //let actor = actor.clone();
         let response = HttpClient::new(collector.clone())
             .url(site_to_monitor)?
             .follow_location(true)?
@@ -70,10 +77,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let headers = headers.ok_or("No Headers")?;
             log::warn!("Website is bad: {}", status_code);
 
-            let token = request_token(curl.clone()).await?;
+            let token = request_token(actor.clone()).await?;
             send_email(
                 &token,
-                curl.clone(),
+                actor.clone(),
                 site_to_monitor,
                 &headers,
                 status_code,
@@ -88,7 +95,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-async fn request_token(curl: Curl) -> OAuth2Result<AccessToken> {
+async fn request_token(actor: CurlActor<Collector>) -> OAuth2Result<AccessToken> {
     let scopes = SCOPES.iter().map(|&s| Scope::new(s.to_string())).collect();
     auth::device_code_flow(
         CLIENT_ID,
@@ -96,14 +103,14 @@ async fn request_token(curl: Curl) -> OAuth2Result<AccessToken> {
         DeviceAuthorizationUrl::new(DEVICE_AUTH_URL.to_string())?,
         TokenUrl::new(TOKEN_URL.to_string())?,
         scopes,
-        curl,
+        actor,
     )
     .await
 }
 
 async fn send_email(
     token: &AccessToken,
-    curl: Curl,
+    curl: CurlActor<Collector>,
     url: &str,
     headers: &HeaderMap,
     status: StatusCode,
