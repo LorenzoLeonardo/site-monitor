@@ -65,7 +65,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let actor_inner = actor.clone();
         handle.push(tokio::spawn(async move {
             if let Err(err) = monitor_site(actor_inner, site).await {
-                log::error!("{} in {site}", err.to_string());
+                log::error!("[{site}] {}", err.to_string());
             }
         }));
     }
@@ -100,7 +100,7 @@ async fn monitor_site(
                 error::ErrorCodes::HttpError,
                 "No Headers".to_owned(),
             ))?;
-            log::warn!("Website is bad: {}", status_code);
+            log::info!("[{}] {}", site_to_monitor, status_code);
 
             let token = request_token(actor.clone()).await?;
             send_email(
@@ -115,6 +115,7 @@ async fn monitor_site(
 
             tokio::time::sleep(Duration::from_secs(3600)).await;
         } else {
+            log::debug!("[{}] {}", site_to_monitor, status_code);
             tokio::time::sleep(Duration::from_secs(10)).await;
         }
     }
