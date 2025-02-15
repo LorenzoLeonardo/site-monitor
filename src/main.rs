@@ -213,8 +213,8 @@ fn init_logger(level: LevelFilter) {
 
         writeln!(
             buf,
-            "{}[{}]> {}: {}",
-            Local::now().format("[%b-%d-%Y %H:%M:%S.%f]"),
+            "[{}][{}]> {}: {}",
+            Local::now().format("%b-%d-%Y %H:%M:%S.%f"),
             record.level(),
             module,
             record.args()

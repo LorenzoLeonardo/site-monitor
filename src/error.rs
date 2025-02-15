@@ -230,19 +230,21 @@ impl From<InvalidStatusCode> for SiteMonitorError {
 
 impl std::fmt::Display for SiteMonitorError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SiteMonitorError")
-            .field("error_code", &self.error_code.to_string())
-            .field("error_code_desc", &self.error_code_desc)
-            .finish()
+        write!(
+            f,
+            "code: {} description: {}",
+            self.error_code, self.error_code_desc
+        )
     }
 }
 
 impl Debug for SiteMonitorError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SiteMonitorError")
-            .field("error_code", &self.error_code.to_string())
-            .field("error_code_desc", &self.error_code_desc)
-            .finish()
+        write!(
+            f,
+            "code: {} description: {}",
+            self.error_code, self.error_code_desc
+        )
     }
 }
 
