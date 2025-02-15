@@ -100,43 +100,66 @@ async fn monitor_site(
             .nobody(true)?
             .nonblocking(actor.clone())
             .send_request()
-            .await?;
-
-        let status_code = StatusCode::from_u16(response.response_code()? as u16)?;
-        let (body, headers) = response.get_ref().get_response_body_and_headers();
-        log::info!("[{}] {}", site_to_monitor, status_code);
-
-        let headers = headers.ok_or(SiteMonitorError::new(
-            error::ErrorCodes::HttpError,
-            "No Headers".to_owned(),
-        ))?;
-
-        if (status_code != StatusCode::OK) && !was_down {
-            let token = request_token(actor.clone()).await?;
-            let _ = send_email(
-                &token,
-                actor.clone(),
-                site_to_monitor,
-                &headers,
-                status_code,
-                body,
-                Stats::Down,
-            )
             .await;
-            was_down = true;
-        } else if (status_code == StatusCode::OK) && was_down {
-            let token = request_token(actor.clone()).await?;
-            let _ = send_email(
-                &token,
-                actor.clone(),
-                site_to_monitor,
-                &headers,
-                status_code,
-                body,
-                Stats::Up,
-            )
-            .await;
-            was_down = false
+
+        match response {
+            Ok(response) => {
+                let status_code = StatusCode::from_u16(response.response_code()? as u16)?;
+                let (body, headers) = response.get_ref().get_response_body_and_headers();
+                log::info!("[{}] {}", site_to_monitor, status_code);
+
+                let headers = headers.ok_or(SiteMonitorError::new(
+                    error::ErrorCodes::HttpError,
+                    "No Headers".to_owned(),
+                ))?;
+
+                if (status_code != StatusCode::OK) && !was_down {
+                    let token = request_token(actor.clone()).await?;
+                    let _ = send_email(
+                        &token,
+                        actor.clone(),
+                        site_to_monitor,
+                        Some((&headers, status_code)),
+                        body,
+                        Stats::Down,
+                        None,
+                    )
+                    .await;
+                    was_down = true;
+                } else if (status_code == StatusCode::OK) && was_down {
+                    let token = request_token(actor.clone()).await?;
+                    let _ = send_email(
+                        &token,
+                        actor.clone(),
+                        site_to_monitor,
+                        Some((&headers, status_code)),
+                        body,
+                        Stats::Up,
+                        None,
+                    )
+                    .await;
+                    was_down = false
+                }
+            }
+            Err(err) => {
+                let error: SiteMonitorError = err.into();
+                log::info!("[{}] {}", site_to_monitor, error);
+
+                if !was_down {
+                    let token = request_token(actor.clone()).await?;
+                    let _ = send_email(
+                        &token,
+                        actor.clone(),
+                        site_to_monitor,
+                        None,
+                        None,
+                        Stats::Down,
+                        Some(error),
+                    )
+                    .await;
+                    was_down = true;
+                }
+            }
         }
         tokio::time::sleep(Duration::from_secs(10)).await;
     }
@@ -159,31 +182,19 @@ async fn send_email(
     token: &AccessToken,
     curl: CurlActor<Collector>,
     url: &str,
-    headers: &HeaderMap,
-    status: StatusCode,
+    header_status: Option<(&HeaderMap, StatusCode)>,
     html: Option<Vec<u8>>,
     stats: Stats,
+    error: Option<SiteMonitorError>,
 ) -> SiteMonitorResult<()> {
-    let header = headers
-        .iter()
-        .map(|(key, value)| format!("{}: {}", key.as_str(), value.to_str().unwrap_or("")))
-        .collect::<Vec<String>>()
-        .join("\r\n");
-    let local_dt = Local::now();
-    let offset_in_seconds = local_dt.offset().local_minus_utc();
-    let report = format!(
-        "{url} is {stats} at {}\r\n\r\n{header}\r\nStatus Code:{status}",
-        local_dt
-            .with_timezone(&FixedOffset::east_opt(offset_in_seconds).unwrap())
-            .format("%a, %d %b %Y %H:%M:%S (GMT%:z)")
-    );
-
     let (_sender_name, sender_email) = get_sender_profile(
         &token,
         &ProfileUrl(Url::from_str(PROFILE_URL).unwrap()),
         curl,
     )
     .await?;
+
+    let report = format_email_report(url, header_status, stats, error);
 
     Emailer::new(SmtpHostName(SMTP_SERVER.to_string()), SmtpPort(SMTP_PORT))
         .set_sender("Enzo Tech Web Monitor".to_string(), sender_email.0)
@@ -199,6 +210,46 @@ async fn send_email(
         )
         .await;
     Ok(())
+}
+
+fn format_email_report(
+    url: &str,
+    header_status: Option<(&HeaderMap, StatusCode)>,
+    stats: Stats,
+    error: Option<SiteMonitorError>,
+) -> String {
+    let local_dt = Local::now();
+    let offset_in_seconds = local_dt.offset().local_minus_utc();
+
+    if let Some(error) = error {
+        format!(
+            "{url} is {stats} at {}\r\n\r\nCode: {}\r\nDescription: {}",
+            local_dt
+                .with_timezone(&FixedOffset::east_opt(offset_in_seconds).unwrap())
+                .format("%a, %d %b %Y %H:%M:%S (GMT%:z)"),
+            error.error_code,
+            error.error_code_desc
+        )
+    } else {
+        if let Some(header_status) = header_status {
+            let status = header_status.1;
+            let header = header_status
+                .0
+                .iter()
+                .map(|(key, value)| format!("{}: {}", key.as_str(), value.to_str().unwrap_or("")))
+                .collect::<Vec<String>>()
+                .join("\r\n");
+            format!(
+                "{url} is {stats} at {}\r\n\r\n{header}\r\nStatus Code: {status}",
+                local_dt
+                    .with_timezone(&FixedOffset::east_opt(offset_in_seconds).unwrap())
+                    .format("%a, %d %b %Y %H:%M:%S (GMT%:z)")
+            )
+        } else {
+            log::error!("None");
+            panic!("Header not supplied");
+        }
+    }
 }
 
 fn init_logger(level: LevelFilter) {
