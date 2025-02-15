@@ -38,6 +38,12 @@ const SCOPES: &'static [&str] = &[
     "https://outlook.office.com/User.Read",
 ];
 
+#[derive(Debug, strum_macros::Display)]
+enum Stats {
+    Up,
+    Down,
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
@@ -49,8 +55,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let log_level = LevelFilter::from_str(log_level)
         .expect("Log level input must be: off, error, warn, info, debug, trace");
     init_logger(log_level);
-
-    log::info!("Website Monitoring has started...");
+    let name = env!("CARGO_PKG_NAME");
+    let version = env!("CARGO_PKG_VERSION");
+    log::info!("{name} has started v{version}...");
     log::info!("Log {:?}", log_level);
 
     let actor = CurlActor::new();
@@ -81,6 +88,7 @@ async fn monitor_site(
     site_to_monitor: &str,
 ) -> Result<(), SiteMonitorError> {
     log::info!("Monitoring {site_to_monitor}...");
+    let mut was_down = false;
 
     let collector = Collector::RamAndHeaders(Vec::new(), Vec::new());
     loop {
@@ -96,30 +104,41 @@ async fn monitor_site(
 
         let status_code = StatusCode::from_u16(response.response_code()? as u16)?;
         let (body, headers) = response.get_ref().get_response_body_and_headers();
+        log::info!("[{}] {}", site_to_monitor, status_code);
 
-        if status_code != StatusCode::OK {
-            let headers = headers.ok_or(SiteMonitorError::new(
-                error::ErrorCodes::HttpError,
-                "No Headers".to_owned(),
-            ))?;
-            log::info!("[{}] {}", site_to_monitor, status_code);
+        let headers = headers.ok_or(SiteMonitorError::new(
+            error::ErrorCodes::HttpError,
+            "No Headers".to_owned(),
+        ))?;
 
+        if (status_code != StatusCode::OK) && !was_down {
             let token = request_token(actor.clone()).await?;
-            send_email(
+            let _ = send_email(
                 &token,
                 actor.clone(),
                 site_to_monitor,
                 &headers,
                 status_code,
                 body,
+                Stats::Down,
             )
             .await;
-
-            tokio::time::sleep(Duration::from_secs(3600)).await;
-        } else {
-            log::debug!("[{}] {}", site_to_monitor, status_code);
-            tokio::time::sleep(Duration::from_secs(10)).await;
+            was_down = true;
+        } else if (status_code == StatusCode::OK) && was_down {
+            let token = request_token(actor.clone()).await?;
+            let _ = send_email(
+                &token,
+                actor.clone(),
+                site_to_monitor,
+                &headers,
+                status_code,
+                body,
+                Stats::Up,
+            )
+            .await;
+            was_down = false
         }
+        tokio::time::sleep(Duration::from_secs(10)).await;
     }
 }
 
@@ -143,7 +162,8 @@ async fn send_email(
     headers: &HeaderMap,
     status: StatusCode,
     html: Option<Vec<u8>>,
-) {
+    stats: Stats,
+) -> SiteMonitorResult<()> {
     let header = headers
         .iter()
         .map(|(key, value)| format!("{}: {}", key.as_str(), value.to_str().unwrap_or("")))
@@ -152,7 +172,7 @@ async fn send_email(
     let local_dt = Local::now();
     let offset_in_seconds = local_dt.offset().local_minus_utc();
     let report = format!(
-        "{url} is down at {}\r\n\r\n{header}\r\nStatus Code:{status}",
+        "{url} is {stats} at {}\r\n\r\n{header}\r\nStatus Code:{status}",
         local_dt
             .with_timezone(&FixedOffset::east_opt(offset_in_seconds).unwrap())
             .format("%a, %d %b %Y %H:%M:%S (GMT%:z)")
@@ -163,8 +183,7 @@ async fn send_email(
         &ProfileUrl(Url::from_str(PROFILE_URL).unwrap()),
         curl,
     )
-    .await
-    .unwrap();
+    .await?;
 
     Emailer::new(SmtpHostName(SMTP_SERVER.to_string()), SmtpPort(SMTP_PORT))
         .set_sender("Enzo Tech Web Monitor".to_string(), sender_email.0)
@@ -178,7 +197,8 @@ async fn send_email(
             report.as_str(),
             html,
         )
-        .await
+        .await;
+    Ok(())
 }
 
 fn init_logger(level: LevelFilter) {

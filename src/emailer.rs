@@ -65,15 +65,15 @@ impl Emailer {
         match email_connect {
             Ok(mut result) => {
                 log::info!("Sending Email....");
-                let send = result.send(message).await;
-                match send {
-                    Ok(_result) => {
+                let _ = result
+                    .send(message)
+                    .await
+                    .map(|_| {
                         log::info!("Sending success!");
-                    }
-                    Err(err) => {
+                    })
+                    .map_err(|err| {
                         log::error!("Sending failed! {err}");
-                    }
-                }
+                    });
             }
             Err(err) => {
                 log::error!("SMTP XOAUTH2 Credentials rejected!");
