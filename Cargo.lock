@@ -1742,7 +1742,6 @@ dependencies = [
  "directories",
  "env_logger",
  "futures",
- "http",
  "log",
  "mail-send",
  "oauth2",

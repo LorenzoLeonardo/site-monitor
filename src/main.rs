@@ -19,8 +19,8 @@ use curl_http_client::{Collector, ExtendedHandler, HttpClient};
 use emailer::{Emailer, SmtpHostName, SmtpPort};
 use error::{SiteMonitorError, SiteMonitorResult};
 use futures::future;
-use http::{HeaderMap, StatusCode};
 use log::LevelFilter;
+use oauth2::http::{HeaderMap, StatusCode};
 use oauth2::url::Url;
 use oauth2::{AccessToken, DeviceAuthorizationUrl, Scope, TokenUrl};
 

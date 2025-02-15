@@ -4,8 +4,11 @@ use std::{error::Error, str::FromStr};
 
 // 3rd party crates
 use curl_http_client::collector::ExtendedHandler;
-use http::status::InvalidStatusCode;
 use log::SetLoggerError;
+use oauth2::http::header::{InvalidHeaderName, InvalidHeaderValue, ToStrError};
+use oauth2::http::method::InvalidMethod;
+use oauth2::http::status::InvalidStatusCode;
+use oauth2::http::uri::InvalidUri;
 use oauth2::{
     url, ConfigurationError, ErrorResponseType, RequestTokenError, StandardErrorResponse,
 };
@@ -183,32 +186,32 @@ where
     }
 }
 
-impl From<http::header::InvalidHeaderValue> for SiteMonitorError {
-    fn from(e: http::header::InvalidHeaderValue) -> Self {
+impl From<InvalidHeaderValue> for SiteMonitorError {
+    fn from(e: InvalidHeaderValue) -> Self {
         SiteMonitorError::new(ErrorCodes::HttpError, e.to_string())
     }
 }
 
-impl From<http::uri::InvalidUri> for SiteMonitorError {
-    fn from(e: http::uri::InvalidUri) -> Self {
+impl From<InvalidUri> for SiteMonitorError {
+    fn from(e: InvalidUri) -> Self {
         SiteMonitorError::new(ErrorCodes::HttpError, e.to_string())
     }
 }
 
-impl From<http::method::InvalidMethod> for SiteMonitorError {
-    fn from(e: http::method::InvalidMethod) -> Self {
+impl From<InvalidMethod> for SiteMonitorError {
+    fn from(e: InvalidMethod) -> Self {
         SiteMonitorError::new(ErrorCodes::HttpError, e.to_string())
     }
 }
 
-impl From<http::header::InvalidHeaderName> for SiteMonitorError {
-    fn from(e: http::header::InvalidHeaderName) -> Self {
+impl From<InvalidHeaderName> for SiteMonitorError {
+    fn from(e: InvalidHeaderName) -> Self {
         SiteMonitorError::new(ErrorCodes::HttpError, e.to_string())
     }
 }
 
-impl From<http::header::ToStrError> for SiteMonitorError {
-    fn from(e: http::header::ToStrError) -> Self {
+impl From<ToStrError> for SiteMonitorError {
+    fn from(e: ToStrError) -> Self {
         SiteMonitorError::new(ErrorCodes::HttpError, e.to_string())
     }
 }

@@ -3,8 +3,11 @@ use std::str::FromStr;
 use async_curl::CurlActor;
 use curl_http_client::{Collector, HttpClient};
 use derive_deref_rs::Deref;
-use http::{HeaderMap, HeaderValue};
-use oauth2::{url::Url, AccessToken};
+use oauth2::{
+    http::{HeaderMap, HeaderName, HeaderValue},
+    url::Url,
+    AccessToken, HttpRequest, HttpResponse,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{SiteMonitorError, SiteMonitorResult};
@@ -61,13 +64,13 @@ pub async fn get_sender_profile(
         "Authorization",
         HeaderValue::from_str(&header_val).map_err(SiteMonitorError::from)?,
     );
-    let mut request = oauth2::HttpRequest::new(Vec::new());
+    let mut request = HttpRequest::new(Vec::new());
     *request.uri_mut() = oauth2::http::Uri::from_str(profile_endpoint.0.to_owned().as_ref())?;
     *request.method_mut() = oauth2::http::Method::GET;
 
     request.headers_mut().insert(
-        oauth2::http::HeaderName::from_str("Authorization")?,
-        oauth2::http::HeaderValue::from_str(&header_val)?,
+        HeaderName::from_str("Authorization")?,
+        HeaderValue::from_str(&header_val)?,
     );
 
     let response = send(actor, request).await?;
@@ -95,8 +98,8 @@ pub async fn get_sender_profile(
 
 async fn send(
     actor: CurlActor<Collector>,
-    request: oauth2::HttpRequest,
-) -> Result<oauth2::HttpResponse, SiteMonitorError> {
+    request: HttpRequest,
+) -> Result<HttpResponse, SiteMonitorError> {
     log::debug!("Request Url: {}", request.uri());
     log::debug!("Request Header: {:?}", request.headers());
     log::debug!("Request Method: {}", request.method());
