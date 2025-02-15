@@ -55,7 +55,7 @@ impl Emailer {
         let (_sender_name, sender_email) = self.sender;
         let credentials =
             Credentials::new_xoauth2(sender_email.as_str(), access_token.secret().as_str());
-        log::info!("Authenticating....");
+        log::info!("Sending Email....");
         let email_connect = SmtpClientBuilder::new(self.smtp_server.0.as_ref(), self.smtp_port.0)
             .implicit_tls(false)
             .credentials(credentials)
@@ -64,7 +64,6 @@ impl Emailer {
 
         match email_connect {
             Ok(mut result) => {
-                log::info!("Sending Email....");
                 let _ = result
                     .send(message)
                     .await
@@ -76,8 +75,7 @@ impl Emailer {
                     });
             }
             Err(err) => {
-                log::error!("SMTP XOAUTH2 Credentials rejected!");
-                log::error!("Error Details: {err:?}");
+                log::error!("Sending failed! {err}");
             }
         }
     }

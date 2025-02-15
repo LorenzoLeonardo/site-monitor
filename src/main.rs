@@ -143,7 +143,7 @@ async fn monitor_site(
             }
             Err(err) => {
                 let error: SiteMonitorError = err.into();
-                log::info!("[{}] {}", site_to_monitor, error);
+                log::error!("[{}] {}", site_to_monitor, error);
 
                 if !was_down {
                     let token = request_token(actor.clone()).await?;
