@@ -159,19 +159,22 @@ where
 {
     fn from(e: curl_http_client::error::Error<C>) -> Self {
         match e {
-            curl_http_client::error::Error::Curl(err) => {
-                SiteMonitorError::new(ErrorCodes::CurlError, err.description().to_owned())
-            }
+            curl_http_client::error::Error::Curl(err) => SiteMonitorError::new(
+                ErrorCodes::CurlError,
+                format!("{}({})", err.description(), err.code()),
+            ),
             curl_http_client::error::Error::Http(err) => {
                 SiteMonitorError::new(ErrorCodes::HttpError, err)
             }
             curl_http_client::error::Error::Perform(err) => match err {
-                async_curl::error::Error::Curl(err) => {
-                    SiteMonitorError::new(ErrorCodes::CurlError, err.description().to_owned())
-                }
-                async_curl::error::Error::Multi(err) => {
-                    SiteMonitorError::new(ErrorCodes::MultiError, err.description().to_owned())
-                }
+                async_curl::error::Error::Curl(err) => SiteMonitorError::new(
+                    ErrorCodes::CurlError,
+                    format!("{}({})", err.description(), err.code()),
+                ),
+                async_curl::error::Error::Multi(err) => SiteMonitorError::new(
+                    ErrorCodes::MultiError,
+                    format!("{}({})", err.description(), err.code()),
+                ),
                 async_curl::error::Error::TokioRecv(err) => {
                     SiteMonitorError::new(ErrorCodes::TokioRecv, err.to_string())
                 }
@@ -218,7 +221,10 @@ impl From<ToStrError> for SiteMonitorError {
 
 impl From<curl_http_client::dep::curl::Error> for SiteMonitorError {
     fn from(e: curl_http_client::dep::curl::Error) -> Self {
-        SiteMonitorError::new(ErrorCodes::CurlError, e.to_string())
+        SiteMonitorError::new(
+            ErrorCodes::CurlError,
+            format!("{}({})", e.description(), e.code()),
+        )
     }
 }
 
