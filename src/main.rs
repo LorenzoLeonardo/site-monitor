@@ -2,14 +2,13 @@ mod auth;
 mod emailer;
 mod error;
 mod profile;
+mod watcher;
 
-use std::fs::File;
-use std::io::{self, BufRead};
-use std::path::Path;
-
+use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::io::Write;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -18,13 +17,15 @@ use chrono::{FixedOffset, Local};
 use curl_http_client::{Collector, ExtendedHandler, HttpClient};
 use emailer::{Emailer, SmtpHostName, SmtpPort};
 use error::{SiteMonitorError, SiteMonitorResult};
-use futures::future;
 use log::LevelFilter;
 use oauth2::http::{HeaderMap, StatusCode};
 use oauth2::url::Url;
 use oauth2::{AccessToken, DeviceAuthorizationUrl, Scope, TokenUrl};
+use tokio::select;
+use tokio::sync::mpsc::channel;
 
 use profile::{get_sender_profile, ProfileUrl};
+use watcher::{watch_file, WatcherAction};
 
 const DEVICE_AUTH_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/devicecode";
 const TOKEN_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
@@ -62,25 +63,40 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let actor = CurlActor::new();
     let _ = request_token(actor.clone()).await?;
+    let (tx, mut rx) = channel(1);
+    let _ = watch_file(tx, PathBuf::from_str("websites.txt")?).await;
 
-    let path = Path::new("websites.txt");
-    let file = File::open(&path)?;
+    let mut hash_map_task = HashMap::new();
 
-    let reader = io::BufReader::new(file);
-
-    let mut handle = Vec::new();
-    for site in reader.lines() {
-        let actor_inner = actor.clone();
-        handle.push(tokio::spawn(async move {
-            let site = site.unwrap();
-            if let Err(err) = monitor_site(actor_inner, site.as_str()).await {
-                log::error!("[{}] {}", site.as_str(), err.to_string());
+    loop {
+        select! {
+            Some(msg) = rx.recv() => {
+                match msg {
+                    WatcherAction::Add(sites) => {
+                        for site in sites {
+                            let actor_inner = actor.clone();
+                            let site_inner = site.clone();
+                            let handle = tokio::spawn(async move {
+                                if let Err(err) = monitor_site(actor_inner, site_inner.as_str()).await {
+                                    log::error!("[{}] {}", site_inner.as_str(), err.to_string());
+                                }
+                            });
+                            log::info!("[{site}] was just added into monitoring.");
+                            hash_map_task.insert(site, handle);
+                         }
+                    },
+                    WatcherAction::Remove(sites) => {
+                        for site in sites {
+                            if let Some(value) = hash_map_task.remove(&site) {
+                                value.abort();
+                                log::info!("[{site}] was just removed from monitoring.");
+                            }
+                        }
+                    }
+                }
             }
-        }));
+        }
     }
-
-    let _ = future::join_all(handle).await;
-    Ok(())
 }
 
 async fn monitor_site(
