@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use async_trait::async_trait;
+use mail_send::{mail_builder::MessageBuilder, Credentials};
 use oauth2::{HttpRequest, HttpResponse};
 
 use crate::error::SiteMonitorResult;
@@ -48,5 +49,12 @@ impl Interface for MockInterface {
     }
     fn get_token_path(&self) -> PathBuf {
         self.token_path.as_ref().unwrap().to_owned()
+    }
+    async fn send_email<'x>(
+        &self,
+        _credentials: Credentials<String>,
+        _message: MessageBuilder<'x>,
+    ) -> SiteMonitorResult<()> {
+        Ok(())
     }
 }

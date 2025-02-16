@@ -1,0 +1,22 @@
+{
+    "device_auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/devicecode",
+    "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+    "profile_url": "https://outlook.office.com/api/v2.0/me",
+    "client_id": "f7c886f5-00f6-4981-b000-b4d5ab0e5ef2",
+    "scopes": [
+        "offline_access",
+        "https://outlook.office.com/SMTP.Send",
+        "https://outlook.office.com/User.Read"
+    ],
+    "smtp_server": "smtp.office365.com",
+    "smtp_port": 587,
+    "recipient_email": "enzotechcomputersolutions@gmail.com",
+    "curl_connect_timeout": {
+        "secs": 60,
+        "nanos": 0
+    },
+    "smtp_connect_timeout": {
+        "secs": 60,
+        "nanos": 0
+    }
+}

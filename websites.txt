@@ -1,2 +1,2 @@
-https://www.rust-lang.org
-http://localhost:8080
+https://img-corp.net
+https://kaiserhealthgroup.net

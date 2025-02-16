@@ -1,4 +1,5 @@
 mod auth;
+mod config;
 mod emailer;
 mod error;
 mod interface;
@@ -15,6 +16,7 @@ use std::time::Duration;
 
 use async_curl::CurlActor;
 use chrono::{FixedOffset, Local};
+use config::Config;
 use emailer::{Emailer, SmtpHostName, SmtpPort};
 use error::{SiteMonitorError, SiteMonitorResult};
 
@@ -64,7 +66,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     log::info!("{name} has started v{version}...");
     log::info!("Log {:?}", log_level);
 
-    let interface = Production::new(CurlActor::new());
+    let config = Config::load().unwrap();
+    let interface = Production::new(CurlActor::new(), config);
 
     let _ = request_token(interface.clone()).await?;
     let (tx, mut rx) = channel(1);
@@ -210,7 +213,7 @@ async fn send_email<I: Interface>(
     let (_sender_name, sender_email) = get_sender_profile(
         &token,
         &ProfileUrl(Url::from_str(PROFILE_URL).unwrap()),
-        interface,
+        interface.clone(),
     )
     .await?;
 
@@ -227,6 +230,7 @@ async fn send_email<I: Interface>(
             "Enzo Tech Web Monitoring Report",
             report.as_str(),
             html,
+            interface,
         )
         .await;
     Ok(())
