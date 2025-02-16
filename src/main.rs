@@ -64,8 +64,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let version = env!("CARGO_PKG_VERSION");
     log::info!("{name} has started v{version}...");
     log::info!("Log {:?}", log_level);
-    let actor = CurlActor::new();
-    let interface = Production::new(actor.clone());
+
+    let interface = Production::new(CurlActor::new());
 
     let _ = request_token(interface.clone()).await?;
     let (tx, mut rx) = channel(1);
@@ -82,7 +82,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             let site_inner = site.clone();
                             let inner_interface = interface.clone();
                             let handle = tokio::spawn(async move {
-                                if let Err(err) = monitor_site(inner_interface.clone(), site_inner.as_str()).await {
+                                if let Err(err) = monitor_site(inner_interface, site_inner.as_str()).await {
                                     log::error!("[{}] {}", site_inner.as_str(), err.to_string());
                                 }
                             });
