@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use mail_send::{mail_builder::MessageBuilder, Credentials, SmtpClientBuilder};
 use oauth2::AccessToken;
 use serde::{Deserialize, Serialize};
@@ -59,6 +61,7 @@ impl Emailer {
         let email_connect = SmtpClientBuilder::new(self.smtp_server.0.as_ref(), self.smtp_port.0)
             .implicit_tls(false)
             .credentials(credentials)
+            .timeout(Duration::from_secs(30))
             .connect()
             .await;
 
