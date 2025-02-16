@@ -15,7 +15,7 @@ use oauth2::{
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, EnumString, Display)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, EnumString, Display, Clone)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ErrorCodes {
@@ -74,7 +74,7 @@ impl From<String> for ErrorCodes {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct SiteMonitorError {
     pub error_code: ErrorCodes,
     pub error_code_desc: String,

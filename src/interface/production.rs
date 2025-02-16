@@ -2,7 +2,7 @@ use std::{path::PathBuf, time::Duration};
 
 use async_curl::CurlActor;
 use async_trait::async_trait;
-use curl_http_client::{dep::curl::easy::Easy2, Collector, HttpClient};
+use curl_http_client::{Collector, HttpClient};
 use directories::UserDirs;
 use oauth2::{HttpRequest, HttpResponse};
 
@@ -60,7 +60,7 @@ impl Interface for Production {
         Ok(response)
     }
 
-    async fn website_curl_perform(&self, url: &str) -> SiteMonitorResult<Easy2<Collector>> {
+    async fn website_curl_perform(&self, url: &str) -> SiteMonitorResult<HttpResponse> {
         let collector = Collector::RamAndHeaders(Vec::new(), Vec::new());
         let response = HttpClient::new(collector)
             .url(url)?
@@ -69,8 +69,15 @@ impl Interface for Production {
             .timeout(Duration::from_secs(30))?
             .nobody(true)?
             .nonblocking(self.actor.clone())
-            .send_request()
-            .await?;
+            .perform()
+            .await?
+            .map(|resp| {
+                if let Some(resp) = resp {
+                    resp
+                } else {
+                    Vec::new()
+                }
+            });
         Ok(response)
     }
 
