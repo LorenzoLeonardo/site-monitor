@@ -1,8 +1,8 @@
-use std::time::Duration;
-
-use mail_send::{mail_builder::MessageBuilder, Credentials, SmtpClientBuilder};
+use mail_send::{mail_builder::MessageBuilder, Credentials};
 use oauth2::AccessToken;
 use serde::{Deserialize, Serialize};
+
+use crate::interface::Interface;
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Default)]
 pub struct SmtpHostName(pub String);
@@ -37,12 +37,13 @@ impl Emailer {
         self
     }
 
-    pub async fn send_email(
+    pub async fn send_email<I: Interface>(
         self,
         access_token: &AccessToken,
         subject: &str,
         body: &str,
         html: Option<Vec<u8>>,
+        interface: I,
     ) {
         // Start of sending Email
         let mut message = MessageBuilder::new()
@@ -55,31 +56,14 @@ impl Emailer {
         }
 
         let (_sender_name, sender_email) = self.sender;
-        let credentials =
-            Credentials::new_xoauth2(sender_email.as_str(), access_token.secret().as_str());
-        log::info!("Sending Email....");
-        let email_connect = SmtpClientBuilder::new(self.smtp_server.0.as_ref(), self.smtp_port.0)
-            .implicit_tls(false)
-            .credentials(credentials)
-            .timeout(Duration::from_secs(30))
-            .connect()
-            .await;
 
-        match email_connect {
-            Ok(mut result) => {
-                let _ = result
-                    .send(message)
-                    .await
-                    .map(|_| {
-                        log::info!("Sending success!");
-                    })
-                    .map_err(|err| {
-                        log::error!("Sending failed! {err}");
-                    });
-            }
-            Err(err) => {
-                log::error!("Sending failed! {err}");
-            }
-        }
+        let credentials = Credentials::new_xoauth2(sender_email, access_token.secret().to_string());
+        let _ = interface
+            .send_email(credentials, message)
+            .await
+            .map(|_| {
+                log::info!("E-mail send success!");
+            })
+            .map_err(|err| log::info!("E-mail send failed! {err}"));
     }
 }

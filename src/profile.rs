@@ -50,7 +50,7 @@ pub enum Profile {
     Google(GoogleProfile),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ProfileUrl(pub Url);
 
 pub async fn get_sender_profile<I: Interface>(

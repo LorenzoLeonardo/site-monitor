@@ -66,6 +66,7 @@ pub enum ErrorCodes {
     TokioRecv,
     TokioSend,
     UrlParseError,
+    Emailer,
 }
 
 impl From<String> for ErrorCodes {
@@ -231,6 +232,12 @@ impl From<curl_http_client::dep::curl::Error> for SiteMonitorError {
 impl From<InvalidStatusCode> for SiteMonitorError {
     fn from(e: InvalidStatusCode) -> Self {
         SiteMonitorError::new(ErrorCodes::HttpError, e.to_string())
+    }
+}
+
+impl From<mail_send::Error> for SiteMonitorError {
+    fn from(e: mail_send::Error) -> Self {
+        SiteMonitorError::new(ErrorCodes::Emailer, e.to_string())
     }
 }
 
