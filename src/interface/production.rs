@@ -39,6 +39,7 @@ impl Interface for Production {
         log::debug!("Request Body: {}", String::from_utf8_lossy(request.body()));
 
         let response = HttpClient::new(Collector::RamAndHeaders(Vec::new(), Vec::new()))
+            .connect_timeout(Duration::from_secs(30))?
             .request(request)?
             .nonblocking(self.actor.clone())
             .perform()
@@ -66,7 +67,6 @@ impl Interface for Production {
             .url(url)?
             .follow_location(true)?
             .connect_timeout(Duration::from_secs(30))?
-            .timeout(Duration::from_secs(30))?
             .nobody(true)?
             .nonblocking(self.actor.clone())
             .perform()
@@ -88,6 +88,7 @@ impl Interface for Production {
         log::debug!("Request Body: {}", String::from_utf8_lossy(request.body()));
 
         let response = HttpClient::new(Collector::RamAndHeaders(Vec::new(), Vec::new()))
+            .connect_timeout(Duration::from_secs(30))?
             .request(request)?
             .nonblocking(self.actor.clone())
             .perform()
