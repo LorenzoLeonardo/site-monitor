@@ -7,8 +7,6 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use async_curl::CurlActor;
-use curl_http_client::{Collector, HttpClient};
 use directories::UserDirs;
 use oauth2::{
     basic::{BasicClient, BasicTokenType},
@@ -18,22 +16,25 @@ use oauth2::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::error::{ErrorCodes, SiteMonitorError, SiteMonitorResult};
+use crate::{
+    error::{ErrorCodes, SiteMonitorError, SiteMonitorResult},
+    interface::Interface,
+};
 
-pub async fn device_code_flow(
+pub async fn device_code_flow<I: Interface>(
     client_id: &str,
     client_secret: Option<ClientSecret>,
     device_auth_endpoint: DeviceAuthorizationUrl,
     token_endpoint: TokenUrl,
     scopes: Vec<Scope>,
-    actor: CurlActor<Collector>,
+    interface: I,
 ) -> SiteMonitorResult<AccessToken> {
     let oauth2_cloud = DeviceCodeFlow::new(
         ClientId::new(client_id.to_string()),
         client_secret,
         device_auth_endpoint,
         token_endpoint,
-        actor,
+        interface,
     );
 
     let directory = UserDirs::new().ok_or(SiteMonitorError::new(
@@ -74,15 +75,21 @@ pub async fn device_code_flow(
     Ok(token_keeper.access_token)
 }
 
-pub struct DeviceCodeFlow {
+pub struct DeviceCodeFlow<I>
+where
+    I: Interface,
+{
     client_id: ClientId,
     client_secret: Option<ClientSecret>,
     device_auth_endpoint: DeviceAuthorizationUrl,
     token_endpoint: TokenUrl,
-    curl_client: OAuth2Client,
+    curl_client: OAuth2Client<I>,
 }
 
-impl DeviceCodeFlow {
+impl<I> DeviceCodeFlow<I>
+where
+    I: Interface,
+{
     async fn request_device_code(
         &self,
         scopes: Vec<Scope>,
@@ -180,62 +187,45 @@ impl DeviceCodeFlow {
         client_secret: Option<ClientSecret>,
         device_auth_endpoint: DeviceAuthorizationUrl,
         token_endpoint: TokenUrl,
-        actor: CurlActor<Collector>,
+        interface: I,
     ) -> Self {
         Self {
             client_id,
             client_secret,
             device_auth_endpoint,
             token_endpoint,
-            curl_client: OAuth2Client::new(actor),
+            curl_client: OAuth2Client::new(interface),
         }
     }
 }
 
-struct OAuth2Client {
-    actor: CurlActor<Collector>,
+struct OAuth2Client<I>
+where
+    I: Interface,
+{
+    interface: I,
 }
 
-impl OAuth2Client {
-    pub fn new(actor: CurlActor<Collector>) -> Self {
-        Self { actor }
+impl<I> OAuth2Client<I>
+where
+    I: Interface,
+{
+    pub fn new(interface: I) -> Self {
+        Self { interface }
     }
 }
 
-impl<'c> AsyncHttpClient<'c> for OAuth2Client {
+impl<'c, I> AsyncHttpClient<'c> for OAuth2Client<I>
+where
+    I: Interface,
+{
     type Error = SiteMonitorError;
 
     type Future = Pin<Box<dyn Future<Output = Result<HttpResponse, Self::Error>> + Send + 'c>>;
 
     fn call(&'c self, request: HttpRequest) -> Self::Future {
-        let actor = self.actor.clone();
-        Box::pin(async move {
-            log::debug!("Request Url: {}", request.uri());
-            log::debug!("Request Header: {:?}", request.headers());
-            log::debug!("Request Method: {}", request.method());
-            log::debug!("Request Body: {}", String::from_utf8_lossy(request.body()));
-
-            let response = HttpClient::new(Collector::RamAndHeaders(Vec::new(), Vec::new()))
-                .request(request)?
-                .nonblocking(actor)
-                .perform()
-                .await?
-                .map(|resp| {
-                    if let Some(resp) = resp {
-                        resp
-                    } else {
-                        Vec::new()
-                    }
-                });
-
-            log::debug!("Response Status: {}", response.status());
-            log::debug!("Response Header: {:?}", response.headers());
-            log::debug!(
-                "Response Body: {}",
-                String::from_utf8_lossy(response.body())
-            );
-            Ok(response)
-        })
+        let interface = self.interface.clone();
+        Box::pin(async move { interface.oauth2_curl_perform(request).await })
     }
 }
 

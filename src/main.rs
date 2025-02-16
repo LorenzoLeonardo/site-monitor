@@ -1,6 +1,7 @@
 mod auth;
 mod emailer;
 mod error;
+mod interface;
 mod profile;
 mod watcher;
 
@@ -17,6 +18,8 @@ use chrono::{FixedOffset, Local};
 use curl_http_client::{Collector, ExtendedHandler, HttpClient};
 use emailer::{Emailer, SmtpHostName, SmtpPort};
 use error::{SiteMonitorError, SiteMonitorResult};
+
+use interface::Interface;
 use log::LevelFilter;
 use oauth2::http::{HeaderMap, StatusCode};
 use oauth2::url::Url;
@@ -24,6 +27,7 @@ use oauth2::{AccessToken, DeviceAuthorizationUrl, Scope, TokenUrl};
 use tokio::select;
 use tokio::sync::mpsc::channel;
 
+use interface::production::Production;
 use profile::{get_sender_profile, ProfileUrl};
 use watcher::{watch_file, WatcherAction};
 
@@ -60,9 +64,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let version = env!("CARGO_PKG_VERSION");
     log::info!("{name} has started v{version}...");
     log::info!("Log {:?}", log_level);
-
     let actor = CurlActor::new();
-    let _ = request_token(actor.clone()).await?;
+    let interface = Production::new(actor.clone());
+
+    let _ = request_token(interface.clone()).await?;
     let (tx, mut rx) = channel(1);
     let _ = watch_file(tx, PathBuf::from_str("websites.txt")?).await;
 
@@ -76,8 +81,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         for site in sites {
                             let actor_inner = actor.clone();
                             let site_inner = site.clone();
+                            let inner_interface = interface.clone();
                             let handle = tokio::spawn(async move {
-                                if let Err(err) = monitor_site(actor_inner, site_inner.as_str()).await {
+                                if let Err(err) = monitor_site(inner_interface.clone(), actor_inner, site_inner.as_str()).await {
                                     log::error!("[{}] {}", site_inner.as_str(), err.to_string());
                                 }
                             });
@@ -99,7 +105,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-async fn monitor_site(
+async fn monitor_site<I: Interface>(
+    interface: I,
     actor: CurlActor<Collector>,
     site_to_monitor: &str,
 ) -> Result<(), SiteMonitorError> {
@@ -130,7 +137,7 @@ async fn monitor_site(
 
                 if (status_code != StatusCode::OK) && !was_down {
                     log::info!("[{}] {}, is down!", site_to_monitor, status_code);
-                    let token = request_token(actor.clone()).await?;
+                    let token = request_token(interface.clone()).await?;
                     let _ = send_email(
                         &token,
                         actor.clone(),
@@ -144,7 +151,7 @@ async fn monitor_site(
                     was_down = true;
                 } else if (status_code == StatusCode::OK) && was_down {
                     log::info!("[{}] {}, is up!", site_to_monitor, status_code);
-                    let token = request_token(actor.clone()).await?;
+                    let token = request_token(interface.clone()).await?;
                     let _ = send_email(
                         &token,
                         actor.clone(),
@@ -163,7 +170,7 @@ async fn monitor_site(
                 log::error!("[{}] {}", site_to_monitor, error);
 
                 if !was_down {
-                    let token = request_token(actor.clone()).await?;
+                    let token = request_token(interface.clone()).await?;
                     let _ = send_email(
                         &token,
                         actor.clone(),
@@ -182,7 +189,7 @@ async fn monitor_site(
     }
 }
 
-async fn request_token(actor: CurlActor<Collector>) -> SiteMonitorResult<AccessToken> {
+async fn request_token<I: Interface>(interface: I) -> SiteMonitorResult<AccessToken> {
     let scopes = SCOPES.iter().map(|&s| Scope::new(s.to_string())).collect();
     auth::device_code_flow(
         CLIENT_ID,
@@ -190,7 +197,7 @@ async fn request_token(actor: CurlActor<Collector>) -> SiteMonitorResult<AccessT
         DeviceAuthorizationUrl::new(DEVICE_AUTH_URL.to_string())?,
         TokenUrl::new(TOKEN_URL.to_string())?,
         scopes,
-        actor,
+        interface,
     )
     .await
 }
