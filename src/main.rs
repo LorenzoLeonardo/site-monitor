@@ -103,10 +103,9 @@ async fn monitor_site(
     actor: CurlActor<Collector>,
     site_to_monitor: &str,
 ) -> Result<(), SiteMonitorError> {
-    log::info!("Monitoring {site_to_monitor}...");
     let mut was_down = false;
-
     let collector = Collector::RamAndHeaders(Vec::new(), Vec::new());
+
     loop {
         let response = HttpClient::new(collector.clone())
             .url(site_to_monitor)?
@@ -122,7 +121,7 @@ async fn monitor_site(
             Ok(response) => {
                 let status_code = StatusCode::from_u16(response.response_code()? as u16)?;
                 let (body, headers) = response.get_ref().get_response_body_and_headers();
-                log::info!("[{}] {}", site_to_monitor, status_code);
+                log::debug!("[{}] {}", site_to_monitor, status_code);
 
                 let headers = headers.ok_or(SiteMonitorError::new(
                     error::ErrorCodes::HttpError,
@@ -130,6 +129,7 @@ async fn monitor_site(
                 ))?;
 
                 if (status_code != StatusCode::OK) && !was_down {
+                    log::info!("[{}] {}, is down!", site_to_monitor, status_code);
                     let token = request_token(actor.clone()).await?;
                     let _ = send_email(
                         &token,
@@ -143,6 +143,7 @@ async fn monitor_site(
                     .await;
                     was_down = true;
                 } else if (status_code == StatusCode::OK) && was_down {
+                    log::info!("[{}] {}, is up!", site_to_monitor, status_code);
                     let token = request_token(actor.clone()).await?;
                     let _ = send_email(
                         &token,
