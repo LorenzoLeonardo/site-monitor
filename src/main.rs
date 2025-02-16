@@ -124,7 +124,11 @@ async fn monitor_site<I: Interface>(
                 log::debug!("[{}] {}", site_to_monitor, status_code);
 
                 if (status_code != StatusCode::OK) && !was_down {
-                    log::info!("[{}] {}, is down!", site_to_monitor, status_code);
+                    log::info!(
+                        "[{}] {}, is down! Sending report...",
+                        site_to_monitor,
+                        status_code
+                    );
                     let token = request_token(interface.clone()).await?;
                     let _ = send_email(
                         &token,
@@ -138,7 +142,11 @@ async fn monitor_site<I: Interface>(
                     .await;
                     was_down = true;
                 } else if (status_code == StatusCode::OK) && was_down {
-                    log::info!("[{}] {}, is up!", site_to_monitor, status_code);
+                    log::info!(
+                        "[{}] {}, is up! Sending report...",
+                        site_to_monitor,
+                        status_code
+                    );
                     let token = request_token(interface.clone()).await?;
                     let _ = send_email(
                         &token,

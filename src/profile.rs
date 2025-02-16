@@ -92,8 +92,8 @@ pub async fn get_sender_profile<I: Interface>(
             (SenderName(profile.given_name), SenderEmail(profile.email))
         }
     };
-    log::info!("Sender Name: {}", name.as_str());
-    log::info!("Sender E-mail: {}", email.as_str());
+    log::debug!("Sender Name: {}", name.as_str());
+    log::debug!("Sender E-mail: {}", email.as_str());
     Ok((name, email))
 }
 
