@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use async_curl::CurlActor;
 use chrono::{FixedOffset, Local};
-use curl_http_client::{Collector, ExtendedHandler};
+use curl_http_client::ExtendedHandler;
 use emailer::{Emailer, SmtpHostName, SmtpPort};
 use error::{SiteMonitorError, SiteMonitorResult};
 
@@ -79,11 +79,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 match msg {
                     WatcherAction::Add(sites) => {
                         for site in sites {
-                            let actor_inner = actor.clone();
                             let site_inner = site.clone();
                             let inner_interface = interface.clone();
                             let handle = tokio::spawn(async move {
-                                if let Err(err) = monitor_site(inner_interface.clone(), actor_inner, site_inner.as_str()).await {
+                                if let Err(err) = monitor_site(inner_interface.clone(), site_inner.as_str()).await {
                                     log::error!("[{}] {}", site_inner.as_str(), err.to_string());
                                 }
                             });
@@ -107,7 +106,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 async fn monitor_site<I: Interface>(
     interface: I,
-    actor: CurlActor<Collector>,
     site_to_monitor: &str,
 ) -> Result<(), SiteMonitorError> {
     let mut was_down = false;
@@ -130,7 +128,7 @@ async fn monitor_site<I: Interface>(
                     let token = request_token(interface.clone()).await?;
                     let _ = send_email(
                         &token,
-                        actor.clone(),
+                        interface.clone(),
                         site_to_monitor,
                         Some((&headers, status_code)),
                         body,
@@ -144,7 +142,7 @@ async fn monitor_site<I: Interface>(
                     let token = request_token(interface.clone()).await?;
                     let _ = send_email(
                         &token,
-                        actor.clone(),
+                        interface.clone(),
                         site_to_monitor,
                         Some((&headers, status_code)),
                         body,
@@ -163,7 +161,7 @@ async fn monitor_site<I: Interface>(
                     let token = request_token(interface.clone()).await?;
                     let _ = send_email(
                         &token,
-                        actor.clone(),
+                        interface.clone(),
                         site_to_monitor,
                         None,
                         None,
@@ -192,9 +190,9 @@ async fn request_token<I: Interface>(interface: I) -> SiteMonitorResult<AccessTo
     .await
 }
 
-async fn send_email(
+async fn send_email<I: Interface>(
     token: &AccessToken,
-    curl: CurlActor<Collector>,
+    interface: I,
     url: &str,
     header_status: Option<(&HeaderMap, StatusCode)>,
     html: Option<Vec<u8>>,
@@ -204,7 +202,7 @@ async fn send_email(
     let (_sender_name, sender_email) = get_sender_profile(
         &token,
         &ProfileUrl(Url::from_str(PROFILE_URL).unwrap()),
-        curl,
+        interface,
     )
     .await?;
 

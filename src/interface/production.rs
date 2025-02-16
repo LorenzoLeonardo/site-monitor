@@ -63,4 +63,32 @@ impl Interface for Production {
             .await?;
         Ok(response)
     }
+
+    async fn profile_curl_perform(&self, request: HttpRequest) -> SiteMonitorResult<HttpResponse> {
+        log::debug!("Request Url: {}", request.uri());
+        log::debug!("Request Header: {:?}", request.headers());
+        log::debug!("Request Method: {}", request.method());
+        log::debug!("Request Body: {}", String::from_utf8_lossy(request.body()));
+
+        let response = HttpClient::new(Collector::RamAndHeaders(Vec::new(), Vec::new()))
+            .request(request)?
+            .nonblocking(self.actor.clone())
+            .perform()
+            .await?
+            .map(|resp| {
+                if let Some(resp) = resp {
+                    resp
+                } else {
+                    Vec::new()
+                }
+            });
+
+        log::debug!("Response Status: {}", response.status());
+        log::debug!("Response Header: {:?}", response.headers());
+        log::debug!(
+            "Response Body: {}",
+            String::from_utf8_lossy(response.body())
+        );
+        Ok(response)
+    }
 }

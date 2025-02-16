@@ -1,16 +1,17 @@
 use std::str::FromStr;
 
-use async_curl::CurlActor;
-use curl_http_client::{Collector, HttpClient};
 use derive_deref_rs::Deref;
 use oauth2::{
     http::{HeaderMap, HeaderName, HeaderValue},
     url::Url,
-    AccessToken, HttpRequest, HttpResponse,
+    AccessToken, HttpRequest,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::error::{SiteMonitorError, SiteMonitorResult};
+use crate::{
+    error::{SiteMonitorError, SiteMonitorResult},
+    interface::Interface,
+};
 
 #[derive(Deref)]
 pub struct SenderName(pub String);
@@ -52,10 +53,10 @@ pub enum Profile {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ProfileUrl(pub Url);
 
-pub async fn get_sender_profile(
+pub async fn get_sender_profile<I: Interface>(
     access_token: &AccessToken,
     profile_endpoint: &ProfileUrl,
-    actor: CurlActor<Collector>,
+    interface: I,
 ) -> SiteMonitorResult<(SenderName, SenderEmail)> {
     let mut headers = HeaderMap::new();
 
@@ -73,7 +74,7 @@ pub async fn get_sender_profile(
         HeaderValue::from_str(&header_val)?,
     );
 
-    let response = send(actor, request).await?;
+    let response = interface.profile_curl_perform(request).await?;
 
     let body = String::from_utf8(response.body().to_vec()).unwrap_or_default();
 
@@ -94,37 +95,6 @@ pub async fn get_sender_profile(
     log::info!("Sender Name: {}", name.as_str());
     log::info!("Sender E-mail: {}", email.as_str());
     Ok((name, email))
-}
-
-async fn send(
-    actor: CurlActor<Collector>,
-    request: HttpRequest,
-) -> Result<HttpResponse, SiteMonitorError> {
-    log::debug!("Request Url: {}", request.uri());
-    log::debug!("Request Header: {:?}", request.headers());
-    log::debug!("Request Method: {}", request.method());
-    log::debug!("Request Body: {}", String::from_utf8_lossy(request.body()));
-
-    let response = HttpClient::new(Collector::RamAndHeaders(Vec::new(), Vec::new()))
-        .request(request)?
-        .nonblocking(actor)
-        .perform()
-        .await?
-        .map(|resp| {
-            if let Some(resp) = resp {
-                resp
-            } else {
-                Vec::new()
-            }
-        });
-
-    log::debug!("Response Status: {}", response.status());
-    log::debug!("Response Header: {:?}", response.headers());
-    log::debug!(
-        "Response Body: {}",
-        String::from_utf8_lossy(response.body())
-    );
-    Ok(response)
 }
 
 #[cfg(test)]
