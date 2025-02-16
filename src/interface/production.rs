@@ -1,8 +1,9 @@
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 use async_curl::CurlActor;
 use async_trait::async_trait;
 use curl_http_client::{dep::curl::easy::Easy2, Collector, HttpClient};
+use directories::UserDirs;
 use oauth2::{HttpRequest, HttpResponse};
 
 use crate::error::SiteMonitorResult;
@@ -12,11 +13,20 @@ use super::Interface;
 #[derive(Clone)]
 pub struct Production {
     actor: CurlActor<Collector>,
+    token_path: PathBuf,
 }
 
 impl Production {
     pub fn new(actor: CurlActor<Collector>) -> Self {
-        Self { actor }
+        let directory = UserDirs::new().unwrap();
+        let mut directory = directory.home_dir().to_owned();
+
+        directory = directory.join("token");
+
+        Self {
+            actor,
+            token_path: directory,
+        }
     }
 }
 
@@ -90,5 +100,9 @@ impl Interface for Production {
             String::from_utf8_lossy(response.body())
         );
         Ok(response)
+    }
+
+    fn get_token_path(&self) -> PathBuf {
+        self.token_path.to_owned()
     }
 }

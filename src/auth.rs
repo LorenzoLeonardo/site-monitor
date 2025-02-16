@@ -7,7 +7,6 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use directories::UserDirs;
 use oauth2::{
     basic::{BasicClient, BasicTokenType},
     AccessToken, AsyncHttpClient, ClientId, ClientSecret, DeviceAuthorizationUrl,
@@ -34,16 +33,10 @@ pub async fn device_code_flow<I: Interface>(
         client_secret,
         device_auth_endpoint,
         token_endpoint,
-        interface,
+        interface.clone(),
     );
 
-    let directory = UserDirs::new().ok_or(SiteMonitorError::new(
-        ErrorCodes::DirectoryError,
-        "No valid directory".to_string(),
-    ))?;
-    let mut directory = directory.home_dir().to_owned();
-
-    directory = directory.join("token");
+    let directory = interface.get_token_path();
 
     let token_file = PathBuf::from(format!("{}_device_code_flow.json", client_id));
     let mut token_keeper = TokenKeeper::new(directory.to_path_buf());
