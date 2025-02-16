@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use async_curl::CurlActor;
 use async_trait::async_trait;
-use curl_http_client::{Collector, HttpClient};
+use curl_http_client::{dep::curl::easy::Easy2, Collector, HttpClient};
 use oauth2::{HttpRequest, HttpResponse};
 
 use crate::error::SiteMonitorResult;
@@ -45,6 +47,20 @@ impl Interface for Production {
             "Response Body: {}",
             String::from_utf8_lossy(response.body())
         );
+        Ok(response)
+    }
+
+    async fn website_curl_perform(&self, url: &str) -> SiteMonitorResult<Easy2<Collector>> {
+        let collector = Collector::RamAndHeaders(Vec::new(), Vec::new());
+        let response = HttpClient::new(collector)
+            .url(url)?
+            .follow_location(true)?
+            .connect_timeout(Duration::from_secs(30))?
+            .timeout(Duration::from_secs(30))?
+            .nobody(true)?
+            .nonblocking(self.actor.clone())
+            .send_request()
+            .await?;
         Ok(response)
     }
 }

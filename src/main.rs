@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use async_curl::CurlActor;
 use chrono::{FixedOffset, Local};
-use curl_http_client::{Collector, ExtendedHandler, HttpClient};
+use curl_http_client::{Collector, ExtendedHandler};
 use emailer::{Emailer, SmtpHostName, SmtpPort};
 use error::{SiteMonitorError, SiteMonitorResult};
 
@@ -111,19 +111,9 @@ async fn monitor_site<I: Interface>(
     site_to_monitor: &str,
 ) -> Result<(), SiteMonitorError> {
     let mut was_down = false;
-    let collector = Collector::RamAndHeaders(Vec::new(), Vec::new());
 
     loop {
-        let response = HttpClient::new(collector.clone())
-            .url(site_to_monitor)?
-            .follow_location(true)?
-            .connect_timeout(Duration::from_secs(30))?
-            .timeout(Duration::from_secs(30))?
-            .nobody(true)?
-            .nonblocking(actor.clone())
-            .send_request()
-            .await;
-
+        let response = interface.website_curl_perform(site_to_monitor).await;
         match response {
             Ok(response) => {
                 let status_code = StatusCode::from_u16(response.response_code()? as u16)?;
