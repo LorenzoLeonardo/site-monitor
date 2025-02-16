@@ -74,7 +74,7 @@ impl From<String> for ErrorCodes {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct SiteMonitorError {
     pub error_code: ErrorCodes,
     pub error_code_desc: String,

@@ -13,9 +13,9 @@ use crate::{
     interface::Interface,
 };
 
-#[derive(Deref)]
+#[derive(Deref, Debug, PartialEq)]
 pub struct SenderName(pub String);
-#[derive(Deref)]
+#[derive(Deref, Debug, PartialEq)]
 pub struct SenderEmail(pub String);
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -99,7 +99,13 @@ pub async fn get_sender_profile<I: Interface>(
 
 #[cfg(test)]
 mod tests {
-    use crate::profile::Profile;
+    use oauth2::{url::Url, AccessToken, HttpResponse};
+
+    use crate::{
+        error::{ErrorCodes, SiteMonitorError},
+        interface::mock::MockInterface,
+        profile::{get_sender_profile, Profile, ProfileUrl, SenderEmail, SenderName},
+    };
 
     #[test]
     fn test_google_profile() {
@@ -143,5 +149,85 @@ mod tests {
         } else {
             panic!("Not Microsoft");
         }
+    }
+
+    #[tokio::test]
+    async fn test_get_sender_profile_good() {
+        let ms_json = r#"{
+            "@odata.context": "data context",
+            "@odata.id": "data id",
+            "Id": "sample id",
+            "EmailAddress": "test@outlook.com",
+            "DisplayName": "My Name",
+            "Alias": "Haxxx",
+            "MailboxGuid": "en"
+          }"#;
+
+        let mut interface = MockInterface::new();
+        let http_response = HttpResponse::new(ms_json.as_bytes().to_vec());
+        interface.set_profile_perform_response(Ok(http_response));
+
+        let (sender, email) = get_sender_profile(
+            &AccessToken::new("My_token".into()),
+            &ProfileUrl(Url::parse("https://localhost").unwrap()),
+            interface,
+        )
+        .await
+        .unwrap();
+
+        println!("SenderName: {:?}", sender);
+        println!("Email: {:?}", email);
+        assert_eq!(sender, SenderName("My Name".into()));
+        assert_eq!(email, SenderEmail("test@outlook.com".into()));
+    }
+
+    #[tokio::test]
+    async fn test_get_sender_profile_bad() {
+        let mut interface = MockInterface::new();
+
+        interface.set_profile_perform_response(Err(SiteMonitorError::new(
+            crate::error::ErrorCodes::CurlError,
+            "Curl Error".into(),
+        )));
+
+        let result = get_sender_profile(
+            &AccessToken::new("My_token".into()),
+            &ProfileUrl(Url::parse("https://localhost").unwrap()),
+            interface,
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(
+            result,
+            SiteMonitorError::new(crate::error::ErrorCodes::CurlError, "Curl Error".into(),)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_sender_profile_bad_json() {
+        let ms_json = r#"{
+            "@odata.context": "data context",
+            "@odata.id": "data id",
+            "Id": "sample id",
+            "EmailAddress": "test@outlook.com",
+            "DisplayName": "My Name",
+            "Alias: "Haxxx",
+            "MailboxGuid": "en"
+          }"#;
+
+        let mut interface = MockInterface::new();
+        let http_response = HttpResponse::new(ms_json.as_bytes().to_vec());
+        interface.set_profile_perform_response(Ok(http_response));
+
+        let result = get_sender_profile(
+            &AccessToken::new("My_token".into()),
+            &ProfileUrl(Url::parse("https://localhost").unwrap()),
+            interface,
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(result.error_code, ErrorCodes::SerdeJsonParseError);
     }
 }
