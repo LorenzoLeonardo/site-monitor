@@ -17,7 +17,7 @@ use std::time::Duration;
 use async_curl::CurlActor;
 use chrono::{FixedOffset, Local};
 use config::Config;
-use emailer::{Emailer, SmtpHostName, SmtpPort};
+use emailer::Emailer;
 use error::{SiteMonitorError, SiteMonitorResult};
 
 use interface::Interface;
@@ -36,8 +36,6 @@ const DEVICE_AUTH_URL: &str = "https://login.microsoftonline.com/common/oauth2/v
 const TOKEN_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 const PROFILE_URL: &str = "https://outlook.office.com/api/v2.0/me";
 const CLIENT_ID: &str = "f7c886f5-00f6-4981-b000-b4d5ab0e5ef2";
-const SMTP_SERVER: &str = "smtp.office365.com";
-const SMTP_PORT: u16 = 587;
 const SCOPES: &'static [&str] = &[
     "offline_access",
     "https://outlook.office.com/SMTP.Send",
@@ -219,7 +217,7 @@ async fn send_email<I: Interface>(
 
     let report = format_email_report(url, header_status, stats, error);
 
-    Emailer::new(SmtpHostName(SMTP_SERVER.to_string()), SmtpPort(SMTP_PORT))
+    Emailer::new(interface)
         .set_sender("Enzo Tech Web Monitor".to_string(), sender_email.0)
         .add_recipient(
             "Lorenzo Leonardo".into(),
@@ -230,7 +228,6 @@ async fn send_email<I: Interface>(
             "Enzo Tech Web Monitoring Report",
             report.as_str(),
             html,
-            interface,
         )
         .await;
     Ok(())
