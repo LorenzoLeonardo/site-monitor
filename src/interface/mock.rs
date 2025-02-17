@@ -1,10 +1,10 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use async_trait::async_trait;
 use mail_send::{mail_builder::MessageBuilder, Credentials};
-use oauth2::{HttpRequest, HttpResponse};
+use oauth2::{url::Url, DeviceAuthorizationUrl, HttpRequest, HttpResponse, TokenUrl};
 
-use crate::error::SiteMonitorResult;
+use crate::{config::Config, error::SiteMonitorResult, profile::ProfileUrl};
 
 use super::Interface;
 
@@ -56,5 +56,30 @@ impl Interface for MockInterface {
         _message: MessageBuilder<'x>,
     ) -> SiteMonitorResult<()> {
         Ok(())
+    }
+
+    fn get_config(&self) -> Config {
+        Config {
+            device_auth_url: DeviceAuthorizationUrl::new(
+                "https://login.microsoftonline.com/common/oauth2/v2.0/devicecode".into(),
+            )
+            .unwrap(),
+            token_url: TokenUrl::new(
+                "https://login.microsoftonline.com/common/oauth2/v2.0/token".into(),
+            )
+            .unwrap(),
+            profile_url: ProfileUrl(Url::parse("https://outlook.office.com/api/v2.0/me").unwrap()),
+            client_id: String::from("f7c886f5-00f6-4981-b000-b4d5ab0e5ef2"),
+            scopes: vec![
+                "offline_access".into(),
+                "https://outlook.office.com/SMTP.Send".into(),
+                "https://outlook.office.com/User.Read".into(),
+            ],
+            smtp_server: String::from("smtp.office365.com"),
+            smtp_port: 587,
+            recipient_email: String::from("enzotechcomputersolutions@gmail.com"),
+            curl_connect_timeout: Duration::from_secs(60),
+            smtp_connect_timeout: Duration::from_secs(60),
+        }
     }
 }

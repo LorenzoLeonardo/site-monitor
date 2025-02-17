@@ -133,4 +133,8 @@ impl Interface for Production {
         result.send(message).await?;
         Ok(())
     }
+
+    fn get_config(&self) -> Config {
+        self.config.clone()
+    }
 }
