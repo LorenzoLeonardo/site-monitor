@@ -23,37 +23,52 @@ jobs:
         target: ${{matrix.os == 'windows-latest' && 'x86_64-pc-windows-gnu' || 'x86_64-unknown-linux-gnu' }}
 
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --release
 
     - name: Run tests
       run: cargo test --verbose
+
+    - name: Copy config files (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        mkdir -p release
+        cp ./target/release/site-monitor release/
+        cp ./target/release/websites.txt release/
+        cp ./target/release/config.json release/
+
+    - name: Copy config files (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        mkdir -p release
+        cp ./target/release/site-monitor.exe release/
+        cp ./target/release/websites.txt release/
+        cp ./target/release/config.json release/
+
+    - name: Copy config files (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        mkdir -p release
+        cp ./target/release/site-monitor release/
+        cp ./target/release/websites.txt release/
+        cp ./target/release/config.json release/
 
     - name: Upload Linux executable
       if: matrix.os == 'ubuntu-latest'
       uses: actions/upload-artifact@v4
       with:
         name: site-monitor-linux
-        path: |
-          ./target/release/site-monitor
-          ./target/release/config.json
-          ./target/release/websites.txt
+        path: ./release
 
     - name: Upload Windows executable
       if: matrix.os == 'windows-latest'
       uses: actions/upload-artifact@v4
       with:
         name: site-monitor-windows
-        path: |
-          ./target/release/site-monitor.exe
-          ./target/release/config.json
-          ./target/release/websites.txt
+        path: ./release
 
     - name: Upload macOS executable
       if: matrix.os == 'macos-latest'
       uses: actions/upload-artifact@v4
       with:
         name: site-monitor-macos
-        path: |
-          ./target/release/site-monitor
-          ./target/release/config.json
-          ./target/release/websites.txt
+        path: ./release
