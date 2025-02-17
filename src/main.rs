@@ -23,24 +23,13 @@ use error::{SiteMonitorError, SiteMonitorResult};
 use interface::Interface;
 use log::LevelFilter;
 use oauth2::http::{HeaderMap, StatusCode};
-use oauth2::url::Url;
-use oauth2::{AccessToken, DeviceAuthorizationUrl, Scope, TokenUrl};
+use oauth2::{AccessToken, Scope};
 use tokio::select;
 use tokio::sync::mpsc::channel;
 
 use interface::production::Production;
-use profile::{get_sender_profile, ProfileUrl};
+use profile::get_sender_profile;
 use watcher::{watch_file, WatcherAction};
-
-const DEVICE_AUTH_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/devicecode";
-const TOKEN_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
-const PROFILE_URL: &str = "https://outlook.office.com/api/v2.0/me";
-const CLIENT_ID: &str = "f7c886f5-00f6-4981-b000-b4d5ab0e5ef2";
-const SCOPES: &'static [&str] = &[
-    "offline_access",
-    "https://outlook.office.com/SMTP.Send",
-    "https://outlook.office.com/User.Read",
-];
 
 #[derive(Debug, strum_macros::Display)]
 enum Stats {
@@ -187,12 +176,17 @@ async fn monitor_site<I: Interface>(
 }
 
 async fn request_token<I: Interface>(interface: I) -> SiteMonitorResult<AccessToken> {
-    let scopes = SCOPES.iter().map(|&s| Scope::new(s.to_string())).collect();
+    let config = interface.get_config();
+    let scopes = config
+        .scopes
+        .iter()
+        .map(|s| Scope::new(s.to_string()))
+        .collect();
     auth::device_code_flow(
-        CLIENT_ID,
+        &config.client_id,
         None,
-        DeviceAuthorizationUrl::new(DEVICE_AUTH_URL.to_string())?,
-        TokenUrl::new(TOKEN_URL.to_string())?,
+        config.device_auth_url,
+        config.token_url,
         scopes,
         interface,
     )
@@ -208,12 +202,9 @@ async fn send_email<I: Interface>(
     stats: Stats,
     error: Option<SiteMonitorError>,
 ) -> SiteMonitorResult<()> {
-    let (_sender_name, sender_email) = get_sender_profile(
-        &token,
-        &ProfileUrl(Url::from_str(PROFILE_URL).unwrap()),
-        interface.clone(),
-    )
-    .await?;
+    let config = interface.get_config();
+    let (_sender_name, sender_email) =
+        get_sender_profile(&token, &config.profile_url, interface.clone()).await?;
 
     let report = format_email_report(url, header_status, stats, error);
 

@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use mail_send::{mail_builder::MessageBuilder, Credentials};
 use oauth2::{HttpRequest, HttpResponse};
 
-use crate::error::SiteMonitorResult;
+use crate::{config::Config, error::SiteMonitorResult};
 
 #[async_trait]
 pub trait Interface: Clone + Send {
@@ -21,4 +21,5 @@ pub trait Interface: Clone + Send {
         credentials: Credentials<String>,
         message: MessageBuilder<'x>,
     ) -> SiteMonitorResult<()>;
+    fn get_config(&self) -> Config;
 }
