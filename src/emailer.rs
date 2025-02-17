@@ -11,19 +11,21 @@ pub struct SmtpHostName(pub String);
 pub struct SmtpPort(pub u16);
 
 #[derive(Default)]
-pub struct Emailer {
-    pub smtp_server: SmtpHostName,
-    pub smtp_port: SmtpPort,
+pub struct Emailer<I: Interface> {
     pub sender: (String, String),
     pub recipients: Vec<(String, String)>,
+    interface: I,
 }
 
-impl Emailer {
-    pub fn new(smtp_server: SmtpHostName, smtp_port: SmtpPort) -> Self {
+impl<I> Emailer<I>
+where
+    I: Interface,
+{
+    pub fn new(interface: I) -> Self {
         Self {
-            smtp_server,
-            smtp_port,
-            ..Default::default()
+            sender: (String::new(), String::new()),
+            recipients: vec![],
+            interface,
         }
     }
 
@@ -37,15 +39,14 @@ impl Emailer {
         self
     }
 
-    pub async fn send_email<I: Interface>(
+    pub async fn send_email(
         self,
         access_token: &AccessToken,
         subject: &str,
         body: &str,
         html: Option<Vec<u8>>,
-        interface: I,
     ) {
-        // Start of sending Email
+        log::info!("E-mailing...");
         let mut message = MessageBuilder::new()
             .from(self.sender.to_owned())
             .to(self.recipients)
@@ -58,7 +59,8 @@ impl Emailer {
         let (_sender_name, sender_email) = self.sender;
 
         let credentials = Credentials::new_xoauth2(sender_email, access_token.secret().to_string());
-        let _ = interface
+        let _ = self
+            .interface
             .send_email(credentials, message)
             .await
             .map(|_| {
