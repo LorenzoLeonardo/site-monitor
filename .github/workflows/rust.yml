@@ -34,9 +34,9 @@ jobs:
       with:
         name: site-monitor-linux
         path: |
-          target/release/site-monitor
-          target/release/config.json
-          target/release/websites.txt
+          ./target/release/site-monitor
+          ./target/release/config.json
+          ./target/release/websites.txt
 
     - name: Upload Windows executable
       if: matrix.os == 'windows-latest'
@@ -44,9 +44,9 @@ jobs:
       with:
         name: site-monitor-windows
         path: |
-          target/release/site-monitor.exe
-          target/release/config.json
-          target/release/websites.txt
+          ./target/release/site-monitor.exe
+          ./target/release/config.json
+          ./target/release/websites.txt
 
     - name: Upload macOS executable
       if: matrix.os == 'macos-latest'
@@ -54,6 +54,6 @@ jobs:
       with:
         name: site-monitor-macos
         path: |
-          target/release/site-monitor
-          target/release/config.json
-          target/release/websites.txt
+          ./target/release/site-monitor
+          ./target/release/config.json
+          ./target/release/websites.txt
