@@ -93,7 +93,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-async fn monitor_site<I: Interface>(
+async fn monitor_site<I: Interface + Clone + Send>(
     interface: I,
     site_to_monitor: &str,
 ) -> Result<(), SiteMonitorError> {
@@ -175,7 +175,9 @@ async fn monitor_site<I: Interface>(
     }
 }
 
-async fn request_token<I: Interface>(interface: I) -> SiteMonitorResult<AccessToken> {
+async fn request_token<I: Interface + Clone + Send>(
+    interface: I,
+) -> SiteMonitorResult<AccessToken> {
     let config = interface.get_config();
     let scopes = config
         .scopes
@@ -193,7 +195,7 @@ async fn request_token<I: Interface>(interface: I) -> SiteMonitorResult<AccessTo
     .await
 }
 
-async fn send_email<I: Interface>(
+async fn send_email<I: Interface + Clone>(
     token: &AccessToken,
     interface: I,
     url: &str,

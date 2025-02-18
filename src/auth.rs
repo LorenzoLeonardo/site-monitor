@@ -20,7 +20,7 @@ use crate::{
     interface::Interface,
 };
 
-pub async fn device_code_flow<I: Interface>(
+pub async fn device_code_flow<I: Interface + Clone + Send>(
     client_id: &str,
     client_secret: Option<ClientSecret>,
     device_auth_endpoint: DeviceAuthorizationUrl,
@@ -81,7 +81,7 @@ where
 
 impl<I> DeviceCodeFlow<I>
 where
-    I: Interface,
+    I: Interface + Clone + Send,
 {
     async fn request_device_code(
         &self,
@@ -210,7 +210,7 @@ where
 
 impl<'c, I> AsyncHttpClient<'c> for OAuth2Client<I>
 where
-    I: Interface,
+    I: Interface + Clone + Send,
 {
     type Error = SiteMonitorError;
 
