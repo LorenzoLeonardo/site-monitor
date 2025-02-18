@@ -11,7 +11,7 @@ use oauth2::{HttpRequest, HttpResponse};
 use crate::{config::Config, error::SiteMonitorResult};
 
 #[async_trait]
-pub trait Interface: Clone + Send {
+pub trait Interface {
     async fn oauth2_curl_perform(&self, request: HttpRequest) -> SiteMonitorResult<HttpResponse>;
     async fn website_curl_perform(&self, url: &str) -> SiteMonitorResult<HttpResponse>;
     async fn profile_curl_perform(&self, request: HttpRequest) -> SiteMonitorResult<HttpResponse>;
