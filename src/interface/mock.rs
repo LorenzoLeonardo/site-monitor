@@ -1,4 +1,7 @@
-use std::{path::PathBuf, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use mail_send::{mail_builder::MessageBuilder, Credentials};
@@ -23,11 +26,11 @@ impl MockInterface {
             ..Default::default()
         }
     }
-    #[allow(dead_code)]
+
     pub fn set_oauth2_perform_response(&mut self, result: SiteMonitorResult<HttpResponse>) {
         self.oauth2_perform_response = Some(result);
     }
-    #[allow(dead_code)]
+
     pub fn set_website_perform_response(&mut self, result: SiteMonitorResult<HttpResponse>) {
         self.website_perform_response = Some(result);
     }
@@ -35,9 +38,13 @@ impl MockInterface {
     pub fn set_profile_perform_response(&mut self, result: SiteMonitorResult<HttpResponse>) {
         self.profile_perform_response = Some(result);
     }
-    #[allow(dead_code)]
+
     pub fn set_send_mail_response(&mut self, result: SiteMonitorResult<()>) {
         self.send_mail_response = Some(result);
+    }
+
+    pub fn set_token_path(&mut self, path: &Path) {
+        self.token_path = Some(path.to_path_buf());
     }
 }
 

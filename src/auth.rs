@@ -78,7 +78,8 @@ async fn device_code_flow<I: Interface + Clone + Send>(
     let mut token_keeper = TokenKeeper::new(directory.to_path_buf());
 
     // If there is no exsting token, get it from the cloud
-    if let Err(_err) = token_keeper.read(&token_file) {
+    if let Err(err) = token_keeper.read(&token_file) {
+        log::error!("[{:?}]: {err}", token_file);
         let device_auth_response = oauth2_cloud.request_device_code(scopes).await?;
 
         log::info!(
@@ -262,12 +263,12 @@ where
 pub struct TokenKeeper {
     pub access_token: AccessToken,
     pub refresh_token: Option<RefreshToken>,
-    scopes: Option<Vec<String>>,
-    expires_in: Option<Duration>,
-    token_receive_time: Duration,
+    pub scopes: Option<Vec<String>>,
+    pub expires_in: Option<Duration>,
+    pub token_receive_time: Duration,
     #[serde(skip_serializing)]
     #[serde(skip_deserializing)]
-    file_directory: PathBuf,
+    pub file_directory: PathBuf,
 }
 
 impl TokenKeeper {

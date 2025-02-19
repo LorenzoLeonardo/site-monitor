@@ -45,8 +45,7 @@ pub async fn send_email<I: Interface + Clone>(
             report.as_str(),
             html,
         )
-        .await;
-    Ok(())
+        .await
 }
 
 fn format_email_report(
@@ -124,7 +123,7 @@ where
         subject: &str,
         body: &str,
         html: Option<Vec<u8>>,
-    ) {
+    ) -> SiteMonitorResult<()> {
         log::info!("E-mailing...");
         let mut message = MessageBuilder::new()
             .from(self.sender.to_owned())
@@ -138,13 +137,15 @@ where
         let (_sender_name, sender_email) = self.sender;
 
         let credentials = Credentials::new_xoauth2(sender_email, access_token.secret().to_string());
-        let _ = self
-            .interface
+        self.interface
             .send_email(credentials, message)
             .await
             .map(|_| {
                 log::info!("E-mail send success!");
             })
-            .map_err(|err| log::info!("E-mail send failed! {err}"));
+            .map_err(|err| {
+                log::info!("E-mail send failed! {err}");
+                err
+            })
     }
 }
