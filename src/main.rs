@@ -18,7 +18,7 @@ use async_curl::CurlActor;
 use chrono::{FixedOffset, Local};
 use config::Config;
 use emailer::Emailer;
-use error::{SiteMonitorError, SiteMonitorResult};
+use error::{ErrorCodes, SiteMonitorError, SiteMonitorResult};
 
 use interface::Interface;
 use log::LevelFilter;
@@ -179,20 +179,36 @@ async fn request_token<I: Interface + Clone + Send>(
     interface: I,
 ) -> SiteMonitorResult<AccessToken> {
     let config = interface.get_config();
-    let scopes = config
+    let scopes: Vec<Scope> = config
         .scopes
         .iter()
         .map(|s| Scope::new(s.to_string()))
         .collect();
-    auth::device_code_flow(
-        &config.client_id,
-        None,
-        config.device_auth_url,
-        config.token_url,
-        scopes,
-        interface,
-    )
-    .await
+
+    loop {
+        let result = auth::device_code_flow(
+            &config.client_id,
+            None,
+            config.device_auth_url.to_owned(),
+            config.token_url.to_owned(),
+            scopes.to_owned(),
+            interface.to_owned(),
+        )
+        .await;
+        match result {
+            Ok(result) => return Ok(result),
+            Err(err) => {
+                if err.error_code == ErrorCodes::InvalidGrant
+                    || err.error_code == ErrorCodes::NoToken
+                    || err.error_code == ErrorCodes::ExpiredToken
+                {
+                    log::error!("{err} Please login again!");
+                } else {
+                    return Err(err);
+                }
+            }
+        }
+    }
 }
 
 async fn send_email<I: Interface + Clone>(
