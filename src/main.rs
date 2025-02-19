@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn init_logger(level: LevelFilter) {
+pub fn init_logger(level: LevelFilter) {
     let mut log_builder = env_logger::Builder::new();
     log_builder.format(|buf, record| {
         let mut module = "";
