@@ -20,7 +20,43 @@ use crate::{
     interface::Interface,
 };
 
-pub async fn device_code_flow<I: Interface + Clone + Send>(
+pub async fn request_token<I: Interface + Clone + Send>(
+    interface: I,
+) -> SiteMonitorResult<AccessToken> {
+    let config = interface.get_config();
+    let scopes: Vec<Scope> = config
+        .scopes
+        .iter()
+        .map(|s| Scope::new(s.to_string()))
+        .collect();
+
+    loop {
+        let result = device_code_flow(
+            &config.client_id,
+            None,
+            config.device_auth_url.to_owned(),
+            config.token_url.to_owned(),
+            scopes.to_owned(),
+            interface.to_owned(),
+        )
+        .await;
+        match result {
+            Ok(result) => return Ok(result),
+            Err(err) => {
+                if err.error_code == ErrorCodes::InvalidGrant
+                    || err.error_code == ErrorCodes::NoToken
+                    || err.error_code == ErrorCodes::ExpiredToken
+                {
+                    log::error!("{err} Please login again!");
+                } else {
+                    return Err(err);
+                }
+            }
+        }
+    }
+}
+
+async fn device_code_flow<I: Interface + Clone + Send>(
     client_id: &str,
     client_secret: Option<ClientSecret>,
     device_auth_endpoint: DeviceAuthorizationUrl,
