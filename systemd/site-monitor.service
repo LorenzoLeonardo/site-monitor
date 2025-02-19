@@ -4,11 +4,10 @@ After=network-online.target multi-user.target
 Requires=network-online.target
 
 [Service]
-WorkingDirectory=/home/lleonardo/bin
-ExecStart=/home/lleonardo/bin/site-monitor
+WorkingDirectory=/usr/bin
+ExecStart=/usr/bin/site-monitor
 Restart=always
-User=lleonardo
+User=root
 
 [Install]
 WantedBy=multi-user.target
-
