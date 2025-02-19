@@ -1,0 +1,14 @@
+[Unit]
+Description=Website Monitoring Tool
+After=network-online.target multi-user.target
+Requires=network-online.target
+
+[Service]
+WorkingDirectory=/home/lleonardo/bin
+ExecStart=/home/lleonardo/bin/site-monitor
+Restart=always
+User=lleonardo
+
+[Install]
+WantedBy=multi-user.target
+
