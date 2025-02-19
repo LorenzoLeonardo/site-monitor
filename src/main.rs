@@ -120,7 +120,7 @@ async fn monitor_site<I: Interface + Clone + Send>(
                         status_code
                     );
                     let token = request_token(interface.clone()).await?;
-                    let _ = send_email(
+                    send_email(
                         &token,
                         interface.clone(),
                         site_to_monitor,
@@ -129,8 +129,15 @@ async fn monitor_site<I: Interface + Clone + Send>(
                         Stats::Down,
                         None,
                     )
-                    .await;
-                    was_down = true;
+                    .await
+                    .map_or_else(
+                        |err| {
+                            log::error!("{err}");
+                        },
+                        |_| {
+                            was_down = true;
+                        },
+                    );
                 } else if (status_code == StatusCode::OK) && was_down {
                     log::info!(
                         "[{}] {}, is up! Sending report...",
@@ -138,7 +145,7 @@ async fn monitor_site<I: Interface + Clone + Send>(
                         status_code
                     );
                     let token = request_token(interface.clone()).await?;
-                    let _ = send_email(
+                    send_email(
                         &token,
                         interface.clone(),
                         site_to_monitor,
@@ -147,8 +154,15 @@ async fn monitor_site<I: Interface + Clone + Send>(
                         Stats::Up,
                         None,
                     )
-                    .await;
-                    was_down = false
+                    .await
+                    .map_or_else(
+                        |err| {
+                            log::error!("{err}");
+                        },
+                        |_| {
+                            was_down = false;
+                        },
+                    );
                 }
             }
             Err(err) => {
@@ -157,7 +171,7 @@ async fn monitor_site<I: Interface + Clone + Send>(
 
                 if !was_down {
                     let token = request_token(interface.clone()).await?;
-                    let _ = send_email(
+                    send_email(
                         &token,
                         interface.clone(),
                         site_to_monitor,
@@ -166,8 +180,15 @@ async fn monitor_site<I: Interface + Clone + Send>(
                         Stats::Down,
                         Some(error),
                     )
-                    .await;
-                    was_down = true;
+                    .await
+                    .map_or_else(
+                        |err| {
+                            log::error!("{err}");
+                        },
+                        |_| {
+                            was_down = true;
+                        },
+                    );
                 }
             }
         }
