@@ -1,8 +1,7 @@
 use std::path::PathBuf;
 
-use async_curl::CurlActor;
 use async_trait::async_trait;
-use curl_http_client::{Collector, HttpClient};
+use curl_http_client::{dep::async_curl::CurlActor, Collector, HttpClient};
 use directories::UserDirs;
 use mail_send::{mail_builder::MessageBuilder, Credentials, SmtpClientBuilder};
 use oauth2::{HttpRequest, HttpResponse};

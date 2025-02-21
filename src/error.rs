@@ -4,6 +4,7 @@ use std::{error::Error, str::FromStr};
 
 // 3rd party crates
 use curl_http_client::collector::ExtendedHandler;
+use curl_http_client::dep::async_curl;
 use log::SetLoggerError;
 use oauth2::http::header::{InvalidHeaderName, InvalidHeaderValue, ToStrError};
 use oauth2::http::method::InvalidMethod;
