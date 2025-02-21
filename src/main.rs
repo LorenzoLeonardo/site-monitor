@@ -14,10 +14,9 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use async_curl::CurlActor;
 use chrono::Local;
 use config::Config;
-
+use curl_http_client::dep::async_curl::CurlActor;
 use log::LevelFilter;
 use tokio::select;
 use tokio::sync::mpsc::channel;
